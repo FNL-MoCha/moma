@@ -6,7 +6,8 @@ from termcolor import colored
 
 
 class Logger(object):
-    def __init__(self, loglevel='debug', colored_output=False, dest=None):
+    def __init__(self, loglevel='debug', colored_output=False, dest=None, 
+            quiet=True):
         """
         Basic Logger class for the AMG-232 package.  This logger will take in
         the loglevel and destination for logging, and set up a system to write
@@ -26,12 +27,13 @@ class Logger(object):
                 attrs=['bold']) if colored_output else "DEBUG"
 
         self.colored_output = colored_output
+        self.quiet = quiet
 
         self.log_levels = {
-            'info' :  (0, info_tag), 
-            'warn' :  (1, warn_tag), 
-            'error' : (2, error_tag), 
-            'debug' : (3, debug_tag),
+            'info'   : (0, info_tag), 
+            'warn'   : (1, warn_tag), 
+            'error'  : (2, error_tag), 
+            'debug'  : (3, debug_tag),
         }
         self.log_key = loglevel
         try:
@@ -48,9 +50,6 @@ class Logger(object):
         else:
             self.outfh = sys.stderr
         
-        #  sys.stderr.write(f'DEBUG: log level is: {self.log_level}; tag is: '
-                #  f'{self.log_tag}\n')
-
     def __enumerate_loglevel(self, loglevel):
         try:
             level_tag = self.log_levels[loglevel]
@@ -87,23 +86,37 @@ class Logger(object):
 
         """
         if logtype:
-            level, tag = self.__enumerate_loglevel(logtype)
-            if level is not None and level <= self.log_level:
-                if self.colored_output:
-                     outstr = '{:33} {}{:^22}{}:  {}\n'.format(
-                            colored(self.__get_time(), 'white', attrs=['bold']),
-                            colored('[', 'white', attrs=['bold']),
-                            tag,
-                            colored(']', 'white', attrs=['bold']),
-                            message
-                     )
-                else:
-                    outstr = '{:20} {}{:^8}{}:  {}\n'.format(
-                            self.__get_time(), '[', tag, ']', message
-                    )
-                self.outfh.write(outstr)
+            if logtype == 'header':
+                self.outfh.write(f'{message}\n')
                 self.outfh.flush()
+                if self.quiet is False:
+                    sys.stderr.write(f'{message}\n')
+                    sys.stderr.flush()
+            else: 
+                level, tag = self.__enumerate_loglevel(logtype)
+                
+                if level is not None and level <= self.log_level:
+                    if self.colored_output:
+                         outstr = '{:33} {}{:^22}{}:  {}\n'.format(
+                                colored(self.__get_time(), 'white', attrs=['bold']),
+                                colored('[', 'white', attrs=['bold']),
+                                tag,
+                                colored(']', 'white', attrs=['bold']),
+                                message
+                         )
+                    else:
+                        outstr = '{:20} {}{:^8}{}:  {}\n'.format(
+                                self.__get_time(), '[', tag, ']', message
+                        )
+                    self.outfh.write(outstr)
+                    self.outfh.flush()
+                    if self.quiet is False:
+                        sys.stderr.write(outstr)
+                        sys.stderr.flush()
         else:
             self.outfh.write(f'\t{message}\n')
             self.outfh.flush()
+            if self.quiet is False:
+                sys.stderr.write(f'\t{message}\n')
+                sys.stderr.flush()
 
