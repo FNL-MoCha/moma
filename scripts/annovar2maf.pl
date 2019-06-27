@@ -76,7 +76,7 @@ my %transcript_db = read_cantran($cantran);
 
 my $outfh;
 ($outfile = $annovar_file) =~ s/\.txt/.maf/ unless $outfile;
-print("$info Writing output data to $outfile\n");
+# print("$info Writing output data to $outfile\n");
 open ($outfh, ">", $outfile);
 
 #########--------------- END Arg Parsing and validation ---------------########

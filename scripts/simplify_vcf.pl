@@ -25,7 +25,8 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <input_vcf_file>
-    -f, --filename  Name to use for the resultant output file. Default: <file>_flattened.vcf
+    -f, --filename  Name to use for the resultant output file. 
+                    Default: <file>_flattened.vcf
     -v, --version   Version information
     -h, --help      Print this help information
 EOT
