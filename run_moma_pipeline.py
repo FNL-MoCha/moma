@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Pipeline wrapper script for the AMG-232 Reporter plugin. To probably be renamed
-to something like the MoCha Oncomine Clinical Annotation Tool or something like
-that.
+Pipeline wrapper script for the MoCha Oncomine Clinical Annotation Tool (MOMA)
+plugin. 
 """
 
 import os
@@ -14,6 +13,7 @@ import subprocess
 
 from pprint import pprint as pp # noqa
 from pprint import pformat
+from textwrap import indent
 from operator import itemgetter
 from collections import defaultdict
 from natsort import natsorted
@@ -32,8 +32,8 @@ lib = os.path.join(package_root, 'lib')
 
 debug = True
 
-logger = logger.Logger(loglevel='debug', colored_output=True, 
-        dest='amg232_reporter.log')
+logger = logger.Logger(loglevel='debug', colored_output=True,
+        dest='moma_reporter_{}.log'.format(utils.today()))
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
@@ -74,17 +74,13 @@ def get_args():
         version='%(prog)s - v' + version
     )
     args = parser.parse_args()
-    if debug:
-        logger.write_log('debug', "Args passed to the script:\n%s" %
-                pformat(vars(args), indent=4, width=1))
 
-        if not args.quiet:
-            sys.stderr.write('Args as passed to the script:\n')
-            pp(vars(args), stream=sys.stderr)
-            sys.stderr.write('\n')
-            sys.stderr.flush()
+    if args.quiet is False:
+        logger.quiet = False
+
     if args.genes == 'all':
         args.genes = None
+
     return args
 
 def get_name_from_vcf(vcf):
@@ -115,7 +111,9 @@ def simplify_vcf(vcf, outdir):
         logger.write_log("error", "Could not run `simplify_vcf.pl`. Exiting.")
         sys.exit(1)
     else:
-        return new_name
+        with open(new_name) as fh:
+            num_vars = len([line for line in fh if line.startswith('chr')])
+        return num_vars, new_name
 
 def run_annovar(simple_vcf):
     """
@@ -123,10 +121,7 @@ def run_annovar(simple_vcf):
     then be filtered by gene. Return the resultant Annovar .txt file for 
     downstream processing.
     """
-    cmd = [
-        os.path.join(scripts_dir, 'annovar_wrapper.sh'), 
-        simple_vcf, 
-    ]
+    cmd = [os.path.join(scripts_dir, 'annovar_wrapper.sh'), simple_vcf]
     status = run(cmd, 'annotate VCF with Annovar')
     if status:
         sys.exit(1)
@@ -165,11 +160,8 @@ def generate_report(annovar_data, genes, outfile, outdir):
             if annovar_data[var]['Hugo_Symbol'] in genes:
                 csv_writer.writerow([annovar_data[var][x] for x in wanted_fields])
 
-    logger.write_log('info', 'AMG-232 Reporter completed successfully! Data'
-            ' can be found in %s.' % outdir)
-    sys.stderr.write('AMG-232 Reporter completed successfully! Data can '
-        'be found in %s.\n' % outdir)
-    sys.exit()
+    logger.write_log('info', 'MoCha OncoKB Annotator Pipline completed '
+         'successfully! Data can be found in %s.' % outdir)
 
 def run(cmd, task):
     """
@@ -179,28 +171,26 @@ def run(cmd, task):
     # call or stdout -> PIPE plus stderr -> STDOUT (to mix the two).  Doesn't
     # seem to be a way to handle the two together while still getting a real
     # time buffer flush.  This is really not set up too ideally!
+    with subprocess.Popen(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            universal_newlines=False
+        ) as proc:
+        for line in proc.stdout:
+            logger.write_log('', line, raw=True)
+    '''
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             universal_newlines=True, bufsize=1)
     msg, err = proc.communicate()
-    
-    if msg:
-        logger.write_log('', msg)
+    '''
     if proc.returncode != 0:
         logger.write_log('error', 'An error has occurred while trying to %s' %
                 task)
         logger.write_log('', subprocess.CalledProcessError(proc.returncode,
             ' '.join(proc.args)))
         raise subprocess.CalledProcessError(proc.returncode, ' '.join(proc.args))
-
-    '''
-    response = subprocess.run(cmd, stderr=subprocess.PIPE)
-    if response.check_returncode():
-        logger.write_log('error', '%s did not run sucessfully. Got '
-                'error:\n%s' % (task, response.stderr))
-        sys.exit(response.returncode)
-    return filename
-    '''
-
     return 0
 
 def __marry_oncokb_data(annovar_file, annotated_maf):
@@ -254,63 +244,95 @@ def oncokb_annotate(annovar_file):
     """
     # Make a truncated MAF file of the annovar data that can be read by OncoKB
     # annotator.
+    logger.write_log('info', 'Converting Annovar data to a truncated MAF file.')
     trunc_maf = annovar_file.replace('.txt', '.truncmaf')
     annovar2maf_cmd = [os.path.join(scripts_dir, 'annovar2maf.pl'), '-o', 
             trunc_maf, annovar_file]
     run(annovar2maf_cmd, 'Annovar2MAF')
 
     # Use TSO500 to annotate the truncated MAF file.
+    logger.write_log('info', 'Running MOMA')
     annotated_maf = trunc_maf.replace('.annovar.truncmaf', '.oncokb.tsv')
-    oncokb_annot_cmd = [os.path.join(scripts_dir, 'moma.pl'), '-a', 'oncokb',
-            '-p', 'exac:0.05', '--no-trim', '-V', '-o', annotated_maf, trunc_maf]
+    oncokb_annot_cmd = (
+        os.path.join(scripts_dir, 'moma.pl'), 
+        '-a', 'oncokb',
+        '-p', 'exac:0.05', 
+        '--no-trim', 
+        '-V', 
+        '-o', annotated_maf, 
+        '-l', '/dev/null',
+        trunc_maf
+    )
     run(oncokb_annot_cmd, 'TSO500 MOI Annotator')
 
     # Marry the new OncoKB annotations with the original Annovar Data.
+    logger.write_log('info', 'Marrying OncoKB data to Annovar data.')
     return(__marry_oncokb_data(annovar_file, annotated_maf))
 
 def main(vcf, sample_name, genes, outdir, quiet):
     # Create an output directory based on the sample_name
     if sample_name is None:
         sample_name = get_name_from_vcf(vcf)
+    logger.write_log('info', f'Sample Name is: {sample_name}')
         
     outdir_path = os.path.abspath(output_root)
     if outdir is None:
         outdir_path = os.path.join(outdir_path, '%s_out' % sample_name)
     else:
         outdir_path = os.path.join(outdir_path, outdir)
+    logger.write_log('debug', 
+            f'Selected destination dir for data is: {outdir_path}')
 
     if not os.path.exists(outdir_path):
         os.mkdir(os.path.abspath(outdir_path), 0o755)
 
     # Simplify the VCF
-    if not quiet:
-        sys.stderr.write('Simplifying the VCF file.\n')
-        sys.stderr.flush()
     logger.write_log('info', 'Simplifying the VCF file.')
-    simple_vcf = simplify_vcf(vcf, outdir_path)
+    num_vars, simple_vcf = simplify_vcf(vcf, outdir_path)
+    logger.write_log('info', 'Done simplifying VCF file. There are %s variants'
+            ' in this specimen.' % str(num_vars))
 
     # Annotate the vcf with ANNOVAR.
-    if not quiet:
-        sys.stderr.write('Annotating the simplified VCF with Annovar.\n')
-        sys.stderr.flush()
+    # TODO: Comment back in.
     logger.write_log('info', 'Annotating the simplified VCF file with Annovar.')
     annovar_file = run_annovar(simple_vcf)
 
+    # TODO: delete this.
+    #  annovar_file = os.path.join(outdir_path,
+    #  'MSN31633_v2_MSN31633_RNA_v2_simple.annovar.txt')
+
     # Implement the MOMA here.
-    sys.stderr.write('Filtering data based on OncoKB data.\n')
-    sys.stderr.flush()
     logger.write_log('info', 'Running OncoKB Filter rules on data to look for '
             'oncogenic variants.')
     oncokb_annotated_data = oncokb_annotate(annovar_file)
 
     # Generate a filtered CSV file of results for the report.
     filename = f'{sample_name}_mocha_moi_report.csv' 
-    if not quiet:
-        sys.stderr.write('Generating a report.\n')
-        sys.stderr.flush()
     logger.write_log('info', f'Writing report data to {filename}.')
     generate_report(oncokb_annotated_data, genes, filename, outdir_path)
 
+    utils.__exit__(315)
+    # Clean up and move the logfile to data dir.
+    contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
+    for f in contents:
+        if any(f.endswith(x) for x in ('truncmaf', 'avinput')):
+            logger.write_log('debug', f'Removing {f}.')
+            os.remove(f)
+
+
 if __name__ == '__main__':
     args = get_args()
+
+    pipeline_version = ''
+    with open(os.path.join(package_root, '_version.py')) as fh:
+        pipeline_version = fh.readline().rstrip("'\n'").split("'")[1]
+    welcome_str = ('{0}\n:::::  Running the MoCha OncoKB Annotation (MOMA) '
+         'pipeline - Version {1}  :::::\n{0}\n'.format('='*88, pipeline_version))
+    logger.write_log('header', welcome_str)
+
+    if debug:
+        args_dict = pformat(vars(args))
+        logger.write_log('debug', "Args passed to the script:\n{}".format(
+            indent(args_dict, '    ')))
+
     main(args.vcf, args.name, args.genes, args.outdir, args.quiet)
