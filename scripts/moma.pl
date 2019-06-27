@@ -16,7 +16,7 @@ use Data::Dump;
 use List::Util qw(min max);
 use Sort::Versions;
 use Term::ANSIColor; # Optional colorized output to terminal.
-use Log::Log4perl qw(get_logger);
+use Log::Log4perl qw(get_logger :levels);
 use DateTime;
 use Text::CSV;
 
@@ -24,8 +24,7 @@ use constant DEBUG => 0;
 use constant TRUE => 1;
 use constant FALSE => 0;
 
-
-my $version = "v0.28.062519";
+my $version = "v0.29.062719";
 my $scriptdir = dirname($0);
 
 # Default lookup files.
@@ -68,7 +67,9 @@ USAGE: $scriptname [options] -a <annotation_method> <maf_file(s)>
     -o, --outfile      Write output to custom filename rather than default 
                        "annotated.maf" file.
     -l, --logfile      Write log output to a custom filename rather than a file
-                       called "tso500_moi_annotator_<today>.log".
+                       called "tso500_moi_annotator_<today>.log". If you'd rather
+                       not write a physical logfile, then pass `/dev/null` to 
+                       this option.
     -V, --Verbose      Output messages to STDOUT as well as to a log file, along
                        with some additional loggin messages and info.
 
@@ -134,31 +135,32 @@ unless ($annot_method) {
     exit 1;
 }
 
-$verbose = 1 if DEBUG;
+# Always going to want verbose output if we're doing debugging.
+$verbose = TRUE if DEBUG;
 
-# Set up a logger.
+# Configure a logger.
 my $logfile;
 ($custom_logfile)
     ? ($logfile = $custom_logfile)
     : ($logfile = 'mocha_oncokb_moi_annotator_' . now('short') . '.log');
 
-my $loggers;
-(DEBUG) ? ($loggers = 'DEBUG, Logfile, Screen') : ($loggers = 'DEBUG, Logfile');
-my $logger_conf = qq(
-    log4perl.logger = $loggers
-    log4perl.logger.main = DEBUG
+my $loggers = 'DEBUG, Logfile';
+$loggers .= ', Screen' if $verbose;
 
-    log4perl.appender.Logfile    = Log::Log4perl::Appender::File
-    log4perl.appender.Logfile.filename    = $logfile
-    log4perl.appender.Logfile.mode    = append
+my $logger_conf = qq(
+    log4perl.logger.main = $loggers
+
+    log4perl.appender.Logfile = Log::Log4perl::Appender::File
+    log4perl.appender.Logfile.filename = $logfile
     log4perl.appender.Logfile.layout = Log::Log4perl::Layout::PatternLayout
     log4perl.appender.Logfile.layout.message_chomp_before_newlist = 0
     log4perl.appender.Logfile.layout.ConversionPattern = %d [ %p ]: %m{indent=4}%n
+
 );
 
 my $extra_conf = qq(
     log4perl.appender.Screen = Log::Log4perl::Appender::Screen
-    log4perl.appender.Screen.stderr = 0
+    log4perl.appender.Screen.stderr = 1
     log4perl.appender.Screen.layout = Log::Log4perl::Layout::PatternLayout
     log4perl.appender.Screen.layout.message_chomp_before_newlist = 0
     log4perl.appender.Screen.layout.ConversionPattern = %d [ %p ]: %m{indent=4}%n
@@ -166,10 +168,15 @@ my $extra_conf = qq(
 
 $logger_conf .= $extra_conf if $verbose;
 
+# my $logger_conf = "$scriptdir/../lib/log4perl.conf";
 Log::Log4perl->init(\$logger_conf);
 my $logger = get_logger();
-my $intro_str = sprintf("\n%s\n\t\t    Starting MoCha OncoKB MOI Annotation Script\n%s\n",
-    "="x80, "="x80);
+
+# Levels: DEBUG, INFO, WARN, ERROR, FATAL
+$logger->level($INFO);
+
+my $intro_str = sprintf("\n%s\n\t\t    Starting MoCha OncoKB MOI Annotation " . 
+    "Script\n%s\n", "="x80, "="x80);
 $logger->info($intro_str);
 
 my $popfreq_category = 'gnomad';
@@ -205,7 +212,6 @@ my $tsgs = read_tsgs($tsg_file);
 
 # Process each MAF file
 for my $maf_file (@ARGV) {
-    print "Annotating '$maf_file'...\n" if DEBUG;
     $logger->info( "Annotating '$maf_file'..." );
     my $results;
     $results = annotate_maf($maf_file, $annotation_data, $tsgs);
@@ -328,7 +334,6 @@ sub annotate_maf {
         # DEBUG
         # next unless $var_data{'Hugo_Symbol'} eq 'ID3';
         $logger->debug("\n" . "-"x75 . "\n");
-        #print("\n", "-"x75, "\n") if DEBUG;
 
         # Filter out SNPs, Intronic Variants, etc.
         $filter_count++ and next unless filter_var(\%var_data, $popfreq_category,
