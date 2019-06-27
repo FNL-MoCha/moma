@@ -3,6 +3,7 @@
 import os
 import sys
 import inspect
+import datetime
 
 from termcolor import cprint
 
@@ -13,10 +14,14 @@ def __exit__(line=None, msg=None):
     the script with an optional message telling us why we stopped.  Useful for
     debugging and writing new code.
     """
-    if line is None:
-        filename, line, function = inspect.stack()[1][1:4]
+    filename, lineno, function = inspect.stack()[1][1:4]
+
+    line = lineno if line is None else line
     output = ('Script "{}" stopped in `{}()` at line: {} with message: '
             '"{}".'.format(os.path.basename(filename), function, line, msg))
     sys.stderr.write('\n')
     cprint(output, "white", 'on_green', attrs=['bold'], file=sys.stderr)
     sys.exit()
+
+def today():
+        return datetime.datetime.today().strftime('%Y%m%d')
