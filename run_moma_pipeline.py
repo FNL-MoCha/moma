@@ -8,6 +8,7 @@ plugin.
 import os
 import sys
 import csv 
+import shutil
 import argparse
 import subprocess
 
@@ -21,7 +22,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils # noqa
 
-version = '1.5.20190625-dev0'
+version = '1.6.20190701-dev0'
 
 # Globals
 output_root = os.getcwd()
@@ -32,8 +33,8 @@ lib = os.path.join(package_root, 'lib')
 
 debug = True
 
-logger = logger.Logger(loglevel='debug', colored_output=True,
-        dest='moma_reporter_{}.log'.format(utils.today()))
+logfile = 'moma_reporter_{}.log'.format(utils.today())
+logger = logger.Logger(loglevel='debug', colored_output=True, dest=logfile)
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
@@ -167,10 +168,6 @@ def run(cmd, task):
     """
     Generic subprocess runner.
     """
-    # TODO: We can either capture all output with either only a stdout->PIPE
-    # call or stdout -> PIPE plus stderr -> STDOUT (to mix the two).  Doesn't
-    # seem to be a way to handle the two together while still getting a real
-    # time buffer flush.  This is really not set up too ideally!
     with subprocess.Popen(
             cmd, 
             stdout=subprocess.PIPE, 
@@ -178,19 +175,17 @@ def run(cmd, task):
             bufsize=1,
             universal_newlines=False
         ) as proc:
+        logger.write_log('info', 'Messages from %s:' % task)
         for line in proc.stdout:
-            logger.write_log('', line, raw=True)
-    '''
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            universal_newlines=True, bufsize=1)
-    msg, err = proc.communicate()
-    '''
+            logger.write_log('', line.decode("utf-8"))
+
     if proc.returncode != 0:
         logger.write_log('error', 'An error has occurred while trying to %s' %
                 task)
         logger.write_log('', subprocess.CalledProcessError(proc.returncode,
             ' '.join(proc.args)))
         raise subprocess.CalledProcessError(proc.returncode, ' '.join(proc.args))
+
     return 0
 
 def __marry_oncokb_data(annovar_file, annotated_maf):
@@ -263,7 +258,7 @@ def oncokb_annotate(annovar_file):
         '-l', '/dev/null',
         trunc_maf
     )
-    run(oncokb_annot_cmd, 'TSO500 MOI Annotator')
+    run(oncokb_annot_cmd, 'MoCha OncoKB MOI Annotator')
 
     # Marry the new OncoKB annotations with the original Annovar Data.
     logger.write_log('info', 'Marrying OncoKB data to Annovar data.')
@@ -293,13 +288,8 @@ def main(vcf, sample_name, genes, outdir, quiet):
             ' in this specimen.' % str(num_vars))
 
     # Annotate the vcf with ANNOVAR.
-    # TODO: Comment back in.
     logger.write_log('info', 'Annotating the simplified VCF file with Annovar.')
     annovar_file = run_annovar(simple_vcf)
-
-    # TODO: delete this.
-    #  annovar_file = os.path.join(outdir_path,
-    #  'MSN31633_v2_MSN31633_RNA_v2_simple.annovar.txt')
 
     # Implement the MOMA here.
     logger.write_log('info', 'Running OncoKB Filter rules on data to look for '
@@ -311,13 +301,15 @@ def main(vcf, sample_name, genes, outdir, quiet):
     logger.write_log('info', f'Writing report data to {filename}.')
     generate_report(oncokb_annotated_data, genes, filename, outdir_path)
 
-    utils.__exit__(315)
     # Clean up and move the logfile to data dir.
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
     for f in contents:
         if any(f.endswith(x) for x in ('truncmaf', 'avinput')):
             logger.write_log('debug', f'Removing {f}.')
             os.remove(f)
+    # Move our logfile into the output dir now that we're done.
+    shutil.move(os.path.abspath(logfile), os.path.join(outdir_path, logfile))
+
 
 
 if __name__ == '__main__':
