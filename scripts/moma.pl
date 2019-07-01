@@ -352,6 +352,7 @@ sub annotate_maf {
         # If splice mutation, location may be intronic, and we need to have a
         # val for 'exon' anyway.
         $exon = 'splicesite' if ($exon eq '' and $function =~ /splice/);
+
         do { 
             print "$warn: Still no exon info for var: \n";
             dd @var_data{@wanted_terms} 
@@ -487,9 +488,17 @@ sub run_nonhs_rules {
 
     # DEBUG
     $logger->debug("incoming => gene: $gene, exon: $exon: function: $function");
+
+    local $SIG{__WARN__} = sub {
+        my $msg = shift;
+        print "There is an issue with the following entry:\n";
+        print "incoming =>\n\tgene: $gene\n\texon: $exon\n\tHGVS_p: $hgvs_p",
+             "\n\tfunction: $function\n";
+        print "Warning message: $msg\n";
+    };
     
     # Deleterious / Truncating in TSG
-    if (grep $gene eq $_, @$tsgs and $function =~ /stop|frameshift/) {
+    if (grep $gene eq $_, @$tsgs and $function =~ /stop|frameshift|Splice_Site/) {
         if ($gene eq 'NOTCH1' and $aa_end <= 2250) {
             $moi_count->{'NOTCH1 Truncating Mutations'}++;
             return ('NOTCH1 Truncating Mutations', 'Oncogenic', 
