@@ -12,7 +12,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 
-my $version = '0.6.062519';
+my $version = '0.7.070119';
 
 use constant DEBUG => 0;
 use constant TRUE  => 1;
@@ -130,9 +130,24 @@ sub parse_annovar {
     while (my $line = <$fh>) {
         chomp(@var_data{@header} = split(/\t/, $line));
 
+        # XXX
+        # next unless $var_data{'Gene.refGeneWithVer'} eq 'CDKN2A';
+        # print "$debug Skipping some entries!\n";
+
         # NOTE: Just some basic obvious filters.
         next if $var_data{'Func.refGeneWithVer'} =~ /(intronic|ncrna)/i;
         next if $var_data{'ExonicFunc.refGeneWithVer'} =~ /\bsynonymous/i;
+
+        # NOTE: MYO18A / TIAF is a bit tough to work with since they overlap. As
+        # of now, there is not much data in OncoKB, My Cancer Genome, ExAC, etc.
+        # suggesting oncogenicity / actionability.  We'll skip these for now,
+        # and revisit later if the data improve.
+        if ($var_data{'Gene.refGeneWithVer'} eq 'TIAF1;MYO18A') {
+            print( "Skipping $var_data{'Gene.refGeneWithVer'} since we don't ",
+                 "know about oncogenicity and mapping of these vars.\n");
+             next;
+         }
+
         my $parsed_data = translate_annovar(\%var_data);
         ($parsed_data eq 0)
             ? print "Skipping entry.\n"
@@ -225,8 +240,19 @@ sub map_transcript {
 
     for my $candidate (@$vars) {
         my @elems = split(/:/, $candidate);
+        local $SIG{__WARN__}  = sub {
+            my $msg = shift;
+            print "Issue mapping transcript for the following entry:\n";
+            print "Gene: $gene; type: $type; candidate: ";
+            dd $candidate;
+            dd \@elems;
+            print $msg;
+            exit 1;
+        };
+        
         if ($type eq 'noncoding' || $type eq 'splicesite') {
-            if ($transcript_db{$gene} =~ /$elems[0]/) {
+            my $tx_root = (split(/\./, $elems[0]))[0];
+            if ($transcript_db{$gene} =~ /$tx_root/) {
                 if ($type eq 'noncoding')  {
                     @fields{qw(Hugo_Symbol Transcript_ID HGVSc)} = (
                         $gene, $transcript_db{$gene}, $elems[1]
@@ -240,7 +266,8 @@ sub map_transcript {
             }
         } else {
             $gene = $elems[0];
-            if ($transcript_db{$gene} =~ /$elems[1]/) {
+            my $tx_root = (split(/\./, $elems[1]))[0];
+            if ($transcript_db{$gene} =~ /$tx_root/) {
                 $elems[1] = $transcript_db{$gene};
                 my @field_order = qw(Hugo_Symbol Transcript_ID Exon_Number HGVSc
                     HGVSp_Short);
@@ -249,22 +276,13 @@ sub map_transcript {
             }
         }
     }
-    # If we got here, then we couldn't find a transcript that was in our DB.
-    # Cases:
-    #     1. TP53L [
-    #          "NM_001126116:c.-112G>A",
-    #          "NM_001126117:c.-112G>A",
-    #          "NM_001276697:c.-193G>A",
-    #          "NM_001276699:c.-193G>A",
-    #          "NM_001276698:c.-193G>A",
-    #          "NM_001126115:c.-112G>A",
-    #          ]
-    #       Variant maps to 5'UTR that is not in the primary transcript and in
-    #       the intron of the primary.  Should skip this one. 
 
+    # If we got here, then we couldn't find a transcript that was in our DB.
     print "WARNING: No suitable variant entries / transcripts found!\n";
     print "Input data:\n";
+    print "Gene: $gene => ";
     dd $vars;
+
     return \%fields;
 }
 
