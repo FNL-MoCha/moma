@@ -3,7 +3,7 @@
 import sys
 import datetime
 from termcolor import colored
-from textwrap import indent
+from textwrap import indent, fill
 
 
 class Logger(object):
@@ -63,7 +63,7 @@ class Logger(object):
     def __get_time(self):
         return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    def write_log(self, logtype, message, raw=False):
+    def write_log(self, logtype, message):
         """
         Main log writer method. Will write the log message if the logtype is
         below the logger threshold.
@@ -115,16 +115,10 @@ class Logger(object):
                         sys.stderr.write(outstr)
                         sys.stderr.flush()
         else:
-            if raw:
-                self.outfh.buffer.write(message)
-                self.outfh.flush()
-                if self.quiet is False:
-                    sys.stderr.buffer.write(message)
-                    sys.stderr.flush()
-            else:
-                self.outfh.write(indent(f'{message}\n', '    '))
-                self.outfh.flush()
-                if self.quiet is False:
-                    sys.stderr.write(indent(f'\t{message}\n', '    '))
-                    sys.stderr.flush()
+            outstr = fill(message, width=90)
+            self.outfh.write(indent(f'{outstr}\n', '    '))
+            self.outfh.flush()
+            if self.quiet is False:
+                sys.stderr.write(indent(f'{outstr}\n', '    '))
+                sys.stderr.flush()
 
