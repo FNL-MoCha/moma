@@ -1,0 +1,203 @@
+Hugo Symbol	Alteration	Oncogenicity	Mutation Effect
+AGO2	Amplification	Likely Oncogenic	Likely Gain-of-function
+AKT1	Amplification	Likely Oncogenic	Likely Gain-of-function
+AKT2	Amplification	Likely Oncogenic	Likely Gain-of-function
+AKT3	Amplification	Oncogenic	Gain-of-function
+ALK	Amplification	Likely Oncogenic	Likely Gain-of-function
+AR	Amplification	Oncogenic	Gain-of-function
+AURKA	Amplification	Oncogenic	Gain-of-function
+AXL	Amplification	Likely Oncogenic	Likely Gain-of-function
+BCL2L1	Amplification	Likely Oncogenic	Likely Gain-of-function
+BCL6	Amplification	Likely Oncogenic	Likely Gain-of-function
+BRAF	Amplification	Oncogenic	Gain-of-function
+BRD4	Amplification	Likely Oncogenic	Gain-of-function
+CARD11	Amplification	Likely Oncogenic	Likely Gain-of-function
+CCND1	Amplification	Oncogenic	Gain-of-function
+CCND2	Amplification	Likely Oncogenic	Likely Gain-of-function
+CCND3	Amplification	Likely Oncogenic	Likely Gain-of-function
+CCNE1	Amplification	Oncogenic	Gain-of-function
+CD274	Amplification	Likely Oncogenic	Likely Gain-of-function
+CDK12	Amplification	Inconclusive	Inconclusive
+CDK4	Amplification	Oncogenic	Gain-of-function
+CDK6	Amplification	Oncogenic	Gain-of-function
+CDK8	Amplification	Oncogenic	Gain-of-function
+CXCR4	Amplification	Likely Oncogenic	Likely Gain-of-function
+DDR2	Amplification	Likely Oncogenic	Likely Gain-of-function
+DNMT3B	Amplification	Likely Oncogenic	Likely Gain-of-function
+EGFR	Amplification	Oncogenic	Gain-of-function
+ERBB2	Amplification	Oncogenic	Gain-of-function
+ERBB3	Amplification	Oncogenic	Gain-of-function
+ERCC2	Amplification	Inconclusive	Inconclusive
+ESR1	Amplification	Inconclusive	Inconclusive
+ETV1	Amplification	Oncogenic	Gain-of-function
+EZH2	Amplification	Oncogenic	Gain-of-function
+FGF19	Amplification	Likely Oncogenic	Likely Gain-of-function
+FGF3	Amplification	Inconclusive	Inconclusive
+FGF4	Amplification	Inconclusive	Inconclusive
+FGFR1	Amplification	Oncogenic	Gain-of-function
+FGFR2	Amplification	Oncogenic	Gain-of-function
+FGFR3	Amplification	Oncogenic	Gain-of-function
+FGFR4	Amplification	Oncogenic	Gain-of-function
+FLT1	Amplification	Inconclusive	Inconclusive
+FLT3	Amplification	Likely Oncogenic	Gain-of-function
+FOXA1	Amplification	Oncogenic	Gain-of-function
+GATA3	Amplification	Likely Oncogenic	Likely Gain-of-function
+GLI1	Amplification	Oncogenic	Gain-of-function
+HRAS	Amplification	Likely Oncogenic	Likely Gain-of-function
+IKBKE	Amplification	Likely Oncogenic	Likely Gain-of-function
+JAK2	Amplification	Oncogenic	Gain-of-function
+JUN	Amplification	Oncogenic	Gain-of-function
+KDM5A	Amplification	Likely Oncogenic	Likely Gain-of-function
+KDR	Amplification	Oncogenic	Gain-of-function
+KIT	Amplification	Likely Oncogenic	Likely Gain-of-function
+KMT2A	Amplification	Inconclusive	Inconclusive
+KRAS	Amplification	Likely Oncogenic	Likely Gain-of-function
+MAP2K1	Amplification	Inconclusive	Inconclusive
+MAPK1	Amplification	Likely Oncogenic	Gain-of-function
+MCL1	Amplification	Oncogenic	Gain-of-function
+MDM2	Amplification	Oncogenic	Gain-of-function
+MDM4	Amplification	Oncogenic	Gain-of-function
+MEF2B	Amplification	Likely Oncogenic	Likely Gain-of-function
+MET	Amplification	Oncogenic	Gain-of-function
+MITF	Amplification	Likely Oncogenic	Likely Gain-of-function
+MYC	Amplification	Oncogenic	Gain-of-function
+MYCN	Amplification	Oncogenic	Gain-of-function
+NKX2-1	Amplification	Oncogenic	Gain-of-function
+NRAS	Amplification	Inconclusive	Inconclusive
+NTRK1	Amplification	Likely Oncogenic	Gain-of-function
+PAK1	Amplification	Oncogenic	Gain-of-function
+PAX5	Amplification	Likely Oncogenic	Likely Gain-of-function
+PDCD1LG2	Amplification	Likely Oncogenic	Likely Gain-of-function
+PDGFRA	Amplification	Oncogenic	Gain-of-function
+PDGFRB	Amplification	Inconclusive	Inconclusive
+PIK3CA	Amplification	Likely Oncogenic	Likely Gain-of-function
+PIK3CB	Amplification	Likely Oncogenic	Gain-of-function
+PIK3R2	Amplification	Likely Oncogenic	Likely Gain-of-function
+PPM1D	Amplification	Likely Oncogenic	Likely Gain-of-function
+RAC1	Amplification	Likely Oncogenic	Gain-of-function
+RAF1	Amplification	Oncogenic	Gain-of-function
+RHEB	Amplification	Likely Oncogenic	Likely Gain-of-function
+RHOA	Amplification	Oncogenic	Gain-of-function
+RICTOR	Amplification	Oncogenic	Gain-of-function
+ROS1	Amplification	Likely Oncogenic	Likely Gain-of-function
+RUNX1	Amplification	Oncogenic	Gain-of-function
+SMO	Amplification	Inconclusive	Inconclusive
+SRC	Amplification	Likely Oncogenic	Likely Gain-of-function
+TERT	Amplification	Likely Oncogenic	Likely Gain-of-function
+VEGFA	Amplification	Likely Oncogenic	Gain-of-function
+WHSC1L1	Amplification	Inconclusive	Inconclusive
+YAP1	Amplification	Oncogenic	Gain-of-function
+ANKRD11	Deletion	Likely Oncogenic	Loss-of-function
+APC	Deletion	Likely Oncogenic	Likely Loss-of-function
+ARID1A	Deletion	Likely Oncogenic	Loss-of-function
+ARID1B	Deletion	Likely Oncogenic	Likely Loss-of-function
+ARID2	Deletion	Likely Oncogenic	Likely Loss-of-function
+ASXL1	Deletion	Likely Oncogenic	Likely Loss-of-function
+ASXL2	Deletion	Likely Oncogenic	Likely Loss-of-function
+ATM	Deletion	Likely Oncogenic	Likely Loss-of-function
+ATRX	Deletion	Likely Oncogenic	Likely Loss-of-function
+AXIN1	Deletion	Likely Oncogenic	Likely Loss-of-function
+B2M	Deletion	Likely Oncogenic	Likely Loss-of-function
+BAP1	Deletion	Likely Oncogenic	Likely Loss-of-function
+BARD1	Deletion	Likely Oncogenic	Likely Loss-of-function
+BBC3	Deletion	Likely Oncogenic	Likely Loss-of-function
+BCL10	Deletion	Likely Oncogenic	Likely Loss-of-function
+BCL11B	Deletion	Likely Oncogenic	Loss-of-function
+BCL2L11	Deletion	Oncogenic	Likely Loss-of-function
+BCOR	Deletion	Oncogenic	Loss-of-function
+BRCA1	Deletion	Likely Oncogenic	Likely Loss-of-function
+BRCA2	Deletion	Oncogenic	Loss-of-function
+BRIP1	Deletion	Likely Oncogenic	Likely Loss-of-function
+BTG1	Deletion	Likely Oncogenic	Loss-of-function
+CASP8	Deletion	Likely Oncogenic	Likely Loss-of-function
+CBL	Deletion	Likely Oncogenic	Likely Loss-of-function
+CD58	Deletion	Likely Oncogenic	Loss-of-function
+CDC73	Deletion	Oncogenic	Loss-of-function
+CDH1	Deletion	Likely Oncogenic	Likely Loss-of-function
+CDK12	Deletion	Likely Oncogenic	Likely Loss-of-function
+CDKN1A	Deletion	Likely Oncogenic	Likely Loss-of-function
+CDKN1B	Deletion	Oncogenic	Loss-of-function
+CDKN2A	Deletion	Oncogenic	Loss-of-function
+CDKN2B	Deletion	Oncogenic	Loss-of-function
+CDKN2C	Deletion	Oncogenic	Loss-of-function
+CIC	Deletion	Likely Oncogenic	Likely Loss-of-function
+CIITA	Deletion	Likely Oncogenic	Likely Loss-of-function
+CREBBP	Deletion	Likely Oncogenic	Likely Loss-of-function
+CTCF	Deletion	Likely Oncogenic	Likely Loss-of-function
+DAXX	Deletion	Oncogenic	Loss-of-function
+DICER1	Deletion	Likely Oncogenic	Likely Loss-of-function
+DNMT3A	Deletion	Oncogenic	Loss-of-function
+DNMT3B	Deletion	Likely Oncogenic	Loss-of-function
+DUSP4	Deletion	Inconclusive	Inconclusive
+EED	Deletion	Likely Oncogenic	Likely Loss-of-function
+EP300	Deletion	Likely Oncogenic	Likely Loss-of-function
+EPHA3	Deletion	Likely Oncogenic	Likely Loss-of-function
+ERCC4	Deletion	Likely Oncogenic	Likely Loss-of-function
+ERRFI1	Deletion	Likely Oncogenic	Likely Loss-of-function
+FANCA	Deletion	Likely Oncogenic	Likely Loss-of-function
+FAT1	Deletion	Oncogenic	Loss-of-function
+FBXW7	Deletion	Likely Oncogenic	Likely Loss-of-function
+FH	Deletion	Likely Oncogenic	Loss-of-function
+FOXA1	Deletion	Likely Oncogenic	Likely Loss-of-function
+GATA3	Deletion	Likely Oncogenic	Likely Loss-of-function
+HNF1A	Deletion	Likely Oncogenic	Likely Loss-of-function
+IKZF1	Deletion	Likely Oncogenic	Loss-of-function
+INPP4B	Deletion	Likely Oncogenic	Likely Loss-of-function
+KDM6A	Deletion	Oncogenic	Loss-of-function
+KEAP1	Deletion	Likely Oncogenic	Likely Loss-of-function
+KMT2C	Deletion	Likely Oncogenic	Likely Loss-of-function
+KMT2D	Deletion	Likely Oncogenic	Likely Loss-of-function
+LATS1	Deletion	Likely Oncogenic	Likely Loss-of-function
+LATS2	Deletion	Oncogenic	Loss-of-function
+MAX	Deletion	Likely Oncogenic	Likely Loss-of-function
+MED12	Deletion	Likely Oncogenic	Likely Loss-of-function
+MEN1	Deletion	Oncogenic	Loss-of-function
+MGA	Deletion	Likely Oncogenic	Likely Loss-of-function
+MLH1	Deletion	Likely Oncogenic	Loss-of-function
+MSH2	Deletion	Likely Oncogenic	Likely Loss-of-function
+MSH3	Deletion	Likely Oncogenic	Loss-of-function
+MSH6	Deletion	Likely Oncogenic	Likely Loss-of-function
+NF1	Deletion	Likely Oncogenic	Loss-of-function
+NF2	Deletion	Likely Oncogenic	Likely Loss-of-function
+NOTCH1	Deletion	Likely Oncogenic	Likely Gain-of-function
+NPM1	Deletion	Likely Oncogenic	Likely Loss-of-function
+PARP1	Deletion	Likely Oncogenic	Loss-of-function
+PAX5	Deletion	Likely Oncogenic	Loss-of-function
+PBRM1	Deletion	Likely Oncogenic	Likely Loss-of-function
+PIK3R1	Deletion	Likely Oncogenic	Likely Loss-of-function
+PMS2	Deletion	Oncogenic	Loss-of-function
+PRDM1	Deletion	Likely Oncogenic	Likely Loss-of-function
+PTEN	Deletion	Oncogenic	Loss-of-function
+PTPN11	Deletion	Oncogenic	Loss-of-function
+PTPRD	Deletion	Oncogenic	Loss-of-function
+RAD21	Deletion	Likely Oncogenic	Likely Loss-of-function
+RAD50	Deletion	Likely Oncogenic	Likely Loss-of-function
+RAD51B	Deletion	Likely Oncogenic	Likely Loss-of-function
+RASA1	Deletion	Likely Oncogenic	Likely Loss-of-function
+RB1	Deletion	Likely Oncogenic	Likely Loss-of-function
+RBM10	Deletion	Likely Oncogenic	Likely Loss-of-function
+RELN	Deletion	Likely Oncogenic	Likely Loss-of-function
+RFWD2	Deletion	Likely Oncogenic	Likely Loss-of-function
+SDHB	Deletion	Likely Oncogenic	Loss-of-function
+SDHD	Deletion	Likely Oncogenic	Likely Loss-of-function
+SETD2	Deletion	Oncogenic	Loss-of-function
+SHQ1	Deletion	Likely Oncogenic	Likely Loss-of-function
+SMAD2	Deletion	Likely Oncogenic	Loss-of-function
+SMAD3	Deletion	Likely Oncogenic	Likely Loss-of-function
+SMAD4	Deletion	Likely Oncogenic	Loss-of-function
+SMARCA4	Deletion	Likely Oncogenic	Likely Loss-of-function
+SMARCB1	Deletion	Likely Oncogenic	Likely Loss-of-function
+SOX17	Deletion	Likely Oncogenic	Likely Loss-of-function
+SOX9	Deletion	Oncogenic	Loss-of-function
+STK11	Deletion	Likely Oncogenic	Likely Loss-of-function
+TET1	Deletion	Likely Oncogenic	Likely Loss-of-function
+TET2	Deletion	Likely Oncogenic	Loss-of-function
+TGFBR1	Deletion	Likely Oncogenic	Likely Loss-of-function
+TGFBR2	Deletion	Likely Oncogenic	Likely Loss-of-function
+TNFAIP3	Deletion	Likely Oncogenic	Likely Loss-of-function
+TP53	Deletion	Likely Oncogenic	Likely Loss-of-function
+TP53BP1	Deletion	Likely Oncogenic	Likely Loss-of-function
+TSC1	Deletion	Likely Oncogenic	Likely Loss-of-function
+TSC2	Deletion	Oncogenic	Likely Loss-of-function
+VHL	Deletion	Oncogenic	Likely Loss-of-function
+XRCC2	Deletion	Likely Neutral	Likely Loss-of-function
