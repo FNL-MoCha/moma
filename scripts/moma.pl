@@ -67,7 +67,7 @@ USAGE: $scriptname [options] -a <annotation_method> <maf_file(s)>
     -o, --outfile      Write output to custom filename rather than default 
                        "annotated.maf" file.
     -l, --logfile      Write log output to a custom filename rather than a file
-                       called "tso500_moi_annotator_<today>.log". If you'd rather
+                       called "moma_annotator_<today>.log". If you'd rather
                        not write a physical logfile, then pass `/dev/null` to 
                        this option.
     -V, --Verbose      Output messages to STDOUT as well as to a log file, along
