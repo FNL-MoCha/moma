@@ -197,14 +197,14 @@ sub translate_annovar {
             $ret_data = map_transcript(\@vars, 'noncoding',
                 $var_data->{'Gene.refGeneWithVer'});
         }
-        if ($ret_data->{'Exon_Number'} eq 'NULL') {
+        if ($ret_data->{'Exon_Number'} eq '-') {
             $ret_data->{'Exon_Number'} = $var_data->{'Func.refGeneWithVer'};
         }
         $ret_data->{'Variant_Classification'} = map_consequence(
             $var_data->{'Func.refGeneWithVer'}
         );
     }
-    return FALSE if $ret_data->{'Transcript_ID'} eq 'NULL';
+    return FALSE if $ret_data->{'Transcript_ID'} eq '-';
     @results{keys %$ret_data} = values %$ret_data;
 
     # Add the ExAC Population data to the output, changing the header names to
@@ -231,11 +231,11 @@ sub map_transcript {
     my ($vars, $type, $gene) = @_;
 
     my %fields = (
-        'Hugo_Symbol'    => 'NULL',
-        'Transcript_ID'  => 'NULL',
-        'Exon_Number'    => 'NULL',
-        'HGVSc'          => 'NULL',
-        'HGVSp_Short'    => 'NULL',
+        'Hugo_Symbol'    => '-',
+        'Transcript_ID'  => '-',
+        'Exon_Number'    => '-',
+        'HGVSc'          => '-',
+        'HGVSp_Short'    => '-',
     );
 
     for my $candidate (@$vars) {
@@ -272,6 +272,7 @@ sub map_transcript {
                 my @field_order = qw(Hugo_Symbol Transcript_ID Exon_Number HGVSc
                     HGVSp_Short);
                 @fields{@field_order} = @elems;
+                $fields{'HGVSp_Short'} =~ tr/X/*/;
                 return \%fields;
             }
         }
