@@ -22,7 +22,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils # noqa
 
-version = '1.8.20190708-dev0'
+version = '1.8.20190708-dev1'
 
 # Globals
 output_root = os.getcwd()
@@ -209,8 +209,9 @@ def run(cmd, task, ret_data=False):
     if proc.returncode != 0:
         logger.write_log('error', 'An error has occurred while trying to %s' %
                 task)
-        logger.write_log('', subprocess.CalledProcessError(proc.returncode,
-            ' '.join(proc.args)))
+        #  logger.write_log('', subprocess.CalledProcessError(proc.returncode))
+        #  logger.write_log('', subprocess.CalledProcessError(proc.returncode,
+            #  ' '.join(proc.args)))
         raise subprocess.CalledProcessError(proc.returncode, ' '.join(proc.args))
 
     return data
@@ -330,7 +331,6 @@ def gen_cnv_report(vcf, cu, cl, genelist, outfile):
     if not cnv_data:
         logger.write_log('info', 'No copy number amplifications or deletions '
                 'found in this specimen.')
-        return None
     else:
         logger.write_log('info', 'Found {} copy number events in the '
             'specimen.'.format(len(cnv_data)))
@@ -342,9 +342,12 @@ def gen_cnv_report(vcf, cu, cl, genelist, outfile):
         wanted = ('Chr', 'Start', 'End', 'Gene', 'CN', 'CI_05', 'CI_95', 'MAPD',
                 'Oncogenicity', 'Effect')
         csv_writer.writerow(wanted)
-        for elem in cnv_data:
-            data = [elem[x] for x in wanted]
-            csv_writer.writerow(data)
+        if len(cnv_data) > 1:
+            for elem in cnv_data:
+                data = [elem[x] for x in wanted]
+                csv_writer.writerow(data)
+        else:
+            outfh.write("No CNVs found.\n")
 
 def __cnv_filter(data, cu, cl):
     if float(data['CI_05']) > int(cu):
@@ -402,11 +405,11 @@ def gen_fusion_report(vcf, reads, genelist, filename):
                     'reads is not high enough ({}).'.format(fusion_str,
                     data['Read_Count']))
                 continue
+            data['var_type'] = 'Fusions'
             fusion_data.append(data)
 
     if not fusion_data:
         logger.write_log('info', 'No Fusion events found in this specimen.')
-        return None
     else:
         logger.write_log('info', 'Found {} Fusion events in the '
             'specimen.'.format(len(fusion_data)))
@@ -420,10 +423,12 @@ def gen_fusion_report(vcf, reads, genelist, filename):
         wanted = ('Fusion', 'Junction', 'ID', 'Driver_Gene', 'Partner_Gene', 
             'Read_Count', 'Oncogenicity', 'Effect')
         csv_writer.writerow(wanted)
-        for elem in fusion_data:
-            data = [elem[x] for x in wanted]
-            csv_writer.writerow(data)
-    return
+        if len(fusion_data) > 1:
+            for elem in fusion_data:
+                data = [elem[x] for x in wanted]
+                csv_writer.writerow(data)
+        else:
+            outfh.write("No Fusions found.\n")
 
 def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
     final_report_name = '{}_moi_report_{}.csv'.format(sample_name,
@@ -432,7 +437,7 @@ def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
     logger.write_log('info', 'Collating all variant data into a single report')
 
     with open(os.path.join(path, final_report_name), "w") as outfh:
-        outfh.write(f':::  SNV / Indel Data found in {sample_name}  :::\n')
+        outfh.write(f':::  SNV / Indel Report for {sample_name}  :::\n')
         var_data = __read_report(mut_report)
         if len(var_data) == 1:
             outfh.write(f'{var_data[0]}\nNo SNVs or Indels found.\n')
@@ -440,20 +445,22 @@ def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
             outfh.write('\n'.join(var_data))
 
         if cnv_report is not None:
-            outfh.write(f'\n\n:::  CNV Data found in {sample_name}  :::\n')
+            outfh.write(f'\n\n:::  CNV Data Report for {sample_name}  :::\n')
             var_data = __read_report(cnv_report)
-            if (var_data) == 1:
-                outfh.write(f'{var_data[0]}\nNo CNVs found.\n')
-            else:
-                outfh.write('\n'.join(var_data))
+            outfh.write('\n'.join(var_data))
+            #  if (var_data) == 1:
+                #  outfh.write(f'{var_data[0]}\nNo CNVs found.\n')
+            #  else:
+                #  outfh.write('\n'.join(var_data))
 
         if fusion_report is not None:
-            outfh.write(f'\n\n::: Fusion Data found in {sample_name}  :::\n')
+            outfh.write(f'\n\n::: Fusion Data Report for {sample_name}  :::\n')
             var_data = __read_report(fusion_report)
-            if len(var_data) == 1:
-                outfh.write(f'{var_data[0]}\nNo Fuions found.\n')
-            else:
-                outfh.write('\n'.join(var_data))
+            outfh.write('\n'.join(var_data))
+            #  if len(var_data) == 1:
+                #  outfh.write(f'{var_data[0]}\nNo Fuions found.\n')
+            #  else:
+                #  outfh.write('\n'.join(var_data))
 
 def __read_report(report):
     with open(report) as fh:
@@ -482,8 +489,6 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
     logger.write_log('debug', 
             f'Selected destination dir for data is: {outdir_path}')
 
-    '''
-    # TODO: comment back in.
     if not os.path.exists(outdir_path):
         os.mkdir(os.path.abspath(outdir_path), 0o755)
 
@@ -507,9 +512,9 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
         f'{sample_name}_mocha_snv_indel_report.csv')
     logger.write_log('info', f'Writing report data to {mutation_report}.')
     generate_report(oncokb_annotated_data, genes, mutation_report)
-    '''
 
     # Generate a CNV report if we're asking for one.
+    cnv_report = None
     if get_cnvs:
         logger.write_log('info', 'Generating a CNV report for sample {}. Using '
                 'thresholds 5% CI = {}, 95% CI = {}'.format(sample_name, cu,
@@ -520,8 +525,8 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
         gen_cnv_report(vcf, cu, cl, genelist, cnv_report)
         logger.write_log('info', 'Done with CNV report.')
 
-    '''
     # Generate a Fusions report if we've asked for one.
+    fusion_report = None
     if get_fusions:
         logger.write_log('info', 'Generating a Fusions report for sample {}. '
                 'Using threshold of {} reads.'.format(sample_name, reads))
@@ -533,11 +538,11 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
 
     # Combine the three reports (if we have three!), and generate a single, 
     # final report that can be used for clinical reporting.
-    if get_cnvs or get_fusions:
-        if not get_cnvs:
-            cnv_report = None
-        if not get_fusions:
-            fusion_report = None
+    #  if get_cnvs or get_fusions:
+        #  if not get_cnvs:
+            #  cnv_report = None
+        #  if not get_fusions:
+            #  fusion_report = None
 
     # Combine the three reports into one master report.
     combine_reports(sample_name, mutation_report, cnv_report, fusion_report, 
@@ -552,7 +557,6 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
     # Move our logfile into the output dir now that we're done.
     shutil.move(os.path.abspath(logfile), os.path.join(outdir_path, logfile))
 
-    '''
     logger.write_log('info', 'MoCha OncoKB Annotator Pipline completed '
          'successfully! Data can be found in %s.' % outdir_path)
 
