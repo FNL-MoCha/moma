@@ -24,7 +24,7 @@ use constant DEBUG => 0;
 use constant TRUE => 1;
 use constant FALSE => 0;
 
-my $version = "v0.29.062719";
+my $version = "v0.30.062719";
 my $scriptdir = dirname($0);
 
 # Default lookup files.
@@ -173,7 +173,9 @@ Log::Log4perl->init(\$logger_conf);
 my $logger = get_logger();
 
 # Levels: DEBUG, INFO, WARN, ERROR, FATAL
-$logger->level($INFO);
+my $loglevel;
+(DEBUG) ? ($loglevel = 'DEBUG') : ($loglevel = 'INFO');
+$logger->level($loglevel);
 
 my $intro_str = sprintf("\n%s\n\t\t    Starting MoCha OncoKB MOI Annotation " . 
     "Script\n%s\n", "="x80, "="x80);
@@ -336,8 +338,10 @@ sub annotate_maf {
         $logger->debug("\n" . "-"x75 . "\n");
 
         # Filter out SNPs, Intronic Variants, etc.
-        $filter_count++ and next unless filter_var(\%var_data, $popfreq_category,
-            $popfreq_threshold);
+        unless (filter_var(\%var_data, $popfreq_category, $popfreq_threshold)) {
+            ($filter_count++);
+            next;
+        }
 
         # Try to get a hotspot ID
         my ($hsid, $oncogenicity, $effect); 
@@ -498,7 +502,8 @@ sub run_nonhs_rules {
     };
     
     # Deleterious / Truncating in TSG
-    if (grep $gene eq $_, @$tsgs and $function =~ /stop|frameshift|Splice_Site/) {
+    my @trunc_terms = qw(stop frameshift splice frame_shift nonsense);
+    if (grep $gene eq $_, @$tsgs and grep $function =~ /$_/i, @trunc_terms) {
         if ($gene eq 'NOTCH1' and $aa_end <= 2250) {
             $moi_count->{'NOTCH1 Truncating Mutations'}++;
             return ('NOTCH1 Truncating Mutations', 'Oncogenic', 
