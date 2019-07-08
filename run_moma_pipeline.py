@@ -22,7 +22,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils # noqa
 
-version = '1.7.20190703-dev0'
+version = '1.8.20190708-dev0'
 
 # Globals
 output_root = os.getcwd()
@@ -30,8 +30,7 @@ package_root = os.path.dirname(__file__)
 scripts_dir = os.path.join(package_root, 'scripts')
 resources = os.path.join(package_root, 'resource')
 lib = os.path.join(package_root, 'lib')
-oncokb_cnv_file = os.path.join(package_root, 'resource',
-        'oncokb_cnv_lookup.tsv')
+oncokb_cnv_file = os.path.join(package_root, 'resource', 'oncokb_cnv_lookup.tsv')
 oncokb_fusion_lookup = os.path.join(package_root, 'resource',
         'oncokb_fusion_genes.tsv')
 
@@ -98,7 +97,7 @@ def get_args():
     parser.add_argument(
         '--reads',
         metavar='INT <reads>',
-        default='1000',
+        default='250',
         help='Threshold for reporting fusions. Default: %(default)s.'
     )
     parser.add_argument(
@@ -186,10 +185,6 @@ def generate_report(annovar_data, genes, outfile):
                 key=lambda k: (k.split(':')[0], k.split(':')[1])):
             if genes and annovar_data[var]['Hugo_Symbol'] not in genes:
                 continue
-            #  if genes is None:
-                #  csv_writer.writerow([annovar_data[var][x] for x in wanted_fields])
-            #  else:
-                #  if annovar_data[var]['Hugo_Symbol'] in genes:
             csv_writer.writerow([annovar_data[var][x] for x in wanted_fields])
 
 def run(cmd, task, ret_data=False):
@@ -316,6 +311,10 @@ def gen_cnv_report(vcf, cu, cl, genelist, outfile):
         for r in cnv_results:
             data = dict(zip(header, r.rstrip('\n').split(',')))
             cnv_str = '{},{}'.format(data['Gene'], data['Raw_CN'])
+            if float(data['CI_05']) >= float(cu):
+                data.update({'var_type' : 'Amplification'})
+            elif float(data['CI_95']) <= float(cl):
+                data.update({'var_type' : 'Deletion'})
 
             if genelist and data['Gene'] not in genelist:
                 logger.write_log('debug', 'Filtering out {} because it is not '
@@ -346,7 +345,6 @@ def gen_cnv_report(vcf, cu, cl, genelist, outfile):
         for elem in cnv_data:
             data = [elem[x] for x in wanted]
             csv_writer.writerow(data)
-    return
 
 def __cnv_filter(data, cu, cl):
     if float(data['CI_05']) > int(cu):
@@ -365,10 +363,10 @@ def __oncokb_cnv_and_fusion_annotate(data, lookup_file, datatype):
             elems = line.rstrip('\n').split('\t')
             okb_lookup[elems[0]] = elems[1:]
 
-    okb_annot = {} 
+    #  okb_annot = {} 
     for d in data:
         gene = d['Gene'] if datatype == 'cnv' else d['Driver_Gene']
-        if gene in okb_lookup:
+        if gene in okb_lookup and d['var_type'] == okb_lookup[gene][0]:
             okb_annot = dict(zip(oncokb_fields, okb_lookup[gene]))
         else:
             okb_annot = dict(zip(oncokb_fields, ['.', '.', '.']))
@@ -484,7 +482,8 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
     logger.write_log('debug', 
             f'Selected destination dir for data is: {outdir_path}')
 
-    # TODO: Copy back in!
+    '''
+    # TODO: comment back in.
     if not os.path.exists(outdir_path):
         os.mkdir(os.path.abspath(outdir_path), 0o755)
 
@@ -508,6 +507,7 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
         f'{sample_name}_mocha_snv_indel_report.csv')
     logger.write_log('info', f'Writing report data to {mutation_report}.')
     generate_report(oncokb_annotated_data, genes, mutation_report)
+    '''
 
     # Generate a CNV report if we're asking for one.
     if get_cnvs:
@@ -520,6 +520,7 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
         gen_cnv_report(vcf, cu, cl, genelist, cnv_report)
         logger.write_log('info', 'Done with CNV report.')
 
+    '''
     # Generate a Fusions report if we've asked for one.
     if get_fusions:
         logger.write_log('info', 'Generating a Fusions report for sample {}. '
@@ -537,20 +538,8 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
             cnv_report = None
         if not get_fusions:
             fusion_report = None
-    #TODO: The reports are not formatted correctly (at least not opening in
-    # Excel correctly.  
 
-    '''
-    mutation_report = os.path.join(outdir_path, 
-        f'{sample_name}_mocha_snv_indel_report.csv')
-
-    cnv_report = os.path.join(outdir_path, 
-        f'{sample_name}_mocha_cnv_report.csv')
-
-    fusion_report= os.path.join(outdir_path,
-        f'{sample_name}_mocha_fusion_report.csv')
-
-    '''
+    # Combine the three reports into one master report.
     combine_reports(sample_name, mutation_report, cnv_report, fusion_report, 
             outdir_path)
 
@@ -563,6 +552,7 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
     # Move our logfile into the output dir now that we're done.
     shutil.move(os.path.abspath(logfile), os.path.join(outdir_path, logfile))
 
+    '''
     logger.write_log('info', 'MoCha OncoKB Annotator Pipline completed '
          'successfully! Data can be found in %s.' % outdir_path)
 
