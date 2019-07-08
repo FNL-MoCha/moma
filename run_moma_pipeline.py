@@ -101,6 +101,12 @@ def get_args():
         help='Threshold for reporting fusions. Default: %(default)s.'
     )
     parser.add_argument(
+        '-k', '--keep',
+        action='store_true',
+        help='Keep all intermediate files and do not delete. Useful for '
+            'troubleshooting.'
+    )
+    parser.add_argument(
         '-v', '--version', 
         action='version',
         version='%(prog)s - v' + version
@@ -342,7 +348,7 @@ def gen_cnv_report(vcf, cu, cl, genelist, outfile):
         wanted = ('Chr', 'Start', 'End', 'Gene', 'CN', 'CI_05', 'CI_95', 'MAPD',
                 'Oncogenicity', 'Effect')
         csv_writer.writerow(wanted)
-        if len(cnv_data) > 1:
+        if cnv_data:
             for elem in cnv_data:
                 data = [elem[x] for x in wanted]
                 csv_writer.writerow(data)
@@ -423,7 +429,7 @@ def gen_fusion_report(vcf, reads, genelist, filename):
         wanted = ('Fusion', 'Junction', 'ID', 'Driver_Gene', 'Partner_Gene', 
             'Read_Count', 'Oncogenicity', 'Effect')
         csv_writer.writerow(wanted)
-        if len(fusion_data) > 1:
+        if fusion_data:
             for elem in fusion_data:
                 data = [elem[x] for x in wanted]
                 csv_writer.writerow(data)
@@ -467,7 +473,7 @@ def __read_report(report):
         return [line.rstrip('\n') for line in fh]
 
 def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
-        outdir, quiet):
+        outdir, quiet, keep_intermediate_files):
 
     pipeline_version = ''
     with open(os.path.join(package_root, '_version.py')) as fh:
@@ -536,24 +542,17 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
         gen_fusion_report(vcf, reads, genelist, fusion_report)
         logger.write_log('info', "Done with Fusions report.")
 
-    # Combine the three reports (if we have three!), and generate a single, 
-    # final report that can be used for clinical reporting.
-    #  if get_cnvs or get_fusions:
-        #  if not get_cnvs:
-            #  cnv_report = None
-        #  if not get_fusions:
-            #  fusion_report = None
-
     # Combine the three reports into one master report.
     combine_reports(sample_name, mutation_report, cnv_report, fusion_report, 
             outdir_path)
 
     # Clean up and move the logfile to data dir.
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
-    for f in contents:
-        if any(f.endswith(x) for x in ('truncmaf', 'avinput')):
-            logger.write_log('debug', f'Removing {f}.')
-            os.remove(f)
+    if not keep_intermediate_files:
+        for f in contents:
+            if any(f.endswith(x) for x in ('truncmaf', 'avinput')):
+                logger.write_log('debug', f'Removing {f}.')
+                os.remove(f)
     # Move our logfile into the output dir now that we're done.
     shutil.move(os.path.abspath(logfile), os.path.join(outdir_path, logfile))
 
@@ -573,4 +572,4 @@ if __name__ == '__main__':
         genelist = args.genes.split(',')
 
     main(args.vcf, args.name, genelist, args.CNV, args.cu, args.cl, 
-            args.Fusion, args.reads, args.outdir, args.quiet)
+            args.Fusion, args.reads, args.outdir, args.quiet, args.keep)
