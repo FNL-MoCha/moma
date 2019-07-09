@@ -115,7 +115,7 @@ class Logger(object):
                         sys.stderr.write(outstr)
                         sys.stderr.flush()
         else:
-            outstr = fill(message, width=90)
+            outstr = fill(message, width=80)
             self.outfh.write(indent(f'{outstr}\n', '    '))
             self.outfh.flush()
             if self.quiet is False:
