@@ -13,7 +13,7 @@ use Term::ANSIColor;
 use constant DEBUG => 0;
 
 my $scriptname = basename($0);
-my $version = "v1.0.070219-dev";
+my $version = "v1.0.070919-dev1";
 
 # Remove when in prod.
 #print "\n";
@@ -124,7 +124,6 @@ my %mapped_cnv_data;
 for my $cnv (sort { versioncmp($a, $b) } keys %$cnv_data) {
     my @outfields = qw(END LEN NUMTILES RAW_CN REF_CN CN HS FUNC);
     my ($ci_5, $ci_95) = $cnv_data->{$cnv}->{'CI'} =~ /0\.05:(.*?),0\.95:(.*)$/;
-    #my ($chr, $start, $gene, undef) = split(/:/, $cnv);
     %mapped_cnv_data = map{ $_ => $cnv_data->{$cnv}->{$_} } @outfields;
     @mapped_cnv_data{qw(ci_05 ci_95)} = (sprintf("%.2f", $ci_5), 
         sprintf("%.2f", $ci_95));
@@ -251,9 +250,10 @@ sub proc_vcf {
         next unless $data[4] eq '<CNV>';
         my $varid = join( ':', @data[0..2] );
         
-        # Will either get a HS entry in the line, or nothing at all. Kludgy, but
-        # need to deal with hotspots (HS) field; not like others (i.e. not a 
-        # key=val struct)!
+        # Only get the "hotspot" entries since they are guaranteed to have
+        # enough amplicons to get an accurate call.  Also, fix the field to
+        # match the rest with the format of Key=Value.
+        next unless $data[7] =~ /HS/;
         $data[7] =~ s/HS/HS=Yes/;
 
         # New v5.2 standard deviation value; sometimes data in this field and 
