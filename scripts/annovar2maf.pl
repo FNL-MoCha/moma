@@ -12,7 +12,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 
-my $version = '0.8.070919';
+my $version = '0.9.070919';
 
 use constant DEBUG => 0;
 use constant TRUE  => 1;
@@ -76,7 +76,6 @@ my %transcript_db = read_cantran($cantran);
 
 my $outfh;
 ($outfile = $annovar_file) =~ s/\.txt/.maf/ unless $outfile;
-# print("$info Writing output data to $outfile\n");
 open ($outfh, ">", $outfile);
 
 #########--------------- END Arg Parsing and validation ---------------########
@@ -135,7 +134,8 @@ sub parse_annovar {
         # print "$debug Skipping some entries!\n";
 
         # NOTE: Just some basic obvious filters.
-        next if $var_data{'Func.refGeneWithVer'} =~ /(intronic|ncrna|down)/i;
+        my @unwanted_locations = qw(intronic ncrna downstream utr);
+        next if grep { $var_data{'Func.refGeneWithVer'} =~ /$_/i } @unwanted_locations;
         next if $var_data{'ExonicFunc.refGeneWithVer'} =~ /\bsynonymous/i;
 
         # NOTE: MYO18A / TIAF is a bit tough to work with since they overlap. As
@@ -148,12 +148,28 @@ sub parse_annovar {
              next;
          }
 
-        my $parsed_data = translate_annovar(\%var_data);
-        ($parsed_data eq 0)
-            ? print "Skipping entry.\n"
-            : push(@data, {%var_data, %$parsed_data});
+         # NOTE: Genes U2AF1 and U2AF1L5 completely overlap and we can get the
+         # Annovar Gene1;Gene2 notation just like with MYO18A above.  Just keep
+         # the U2AF1 entries since we have hotspots specifically for that gene.
+         if ($var_data{'Gene.refGeneWithVer'} eq 'U2AF1;U2AF1L5') {
+             print("Got U2AF1;U2AF1L5 entry. Selecting U2AF1 from list.\n");
+             $var_data{'Gene.refGeneWithVer'} = 'U2AF1';
+             my @tx_data;
+             ($var_data{'AAChange.refGeneWithVer'} ne '.') 
+                 ? (@tx_data = split(/,/, $var_data{'AAChange.refGeneWithVer'}))
+                 : (@tx_data = split(/;/, $var_data{'GeneDetail.refGeneWithVer'}));
+             my @selected = grep { /U2AF1\b/ } @tx_data;
+             $var_data{'AAChange.refGeneWithVer'} = join(',', @selected);
+             # dd \@selected;
+             # __exit__(__LINE__);
+         }
+
+         my $parsed_data = translate_annovar(\%var_data);
+         ($parsed_data eq 0)
+             ? print "Skipping entry.\n"
+             : push(@data, {%var_data, %$parsed_data});
     }
-    print "Total parsed and retained variants: " . scalar(@data) . "\n";
+    print "$info Total parsed and retained variants: " . scalar(@data) . "\n";
     return \@data;
 }
 
@@ -242,9 +258,8 @@ sub map_transcript {
         my @elems = split(/:/, $candidate);
         local $SIG{__WARN__}  = sub {
             my $msg = shift;
-            print "Issue mapping transcript for the following entry:\n";
-            print "Gene: $gene; type: $type; candidate: ";
-            dd $candidate;
+            print "$warn Issue mapping transcript for the following entry:\n";
+            print "Gene: $gene; type: $type; candidate: $candidate\n";
             dd \@elems;
             print $msg;
             exit 1;
@@ -279,7 +294,7 @@ sub map_transcript {
     }
 
     # If we got here, then we couldn't find a transcript that was in our DB.
-    print "WARNING: No suitable variant entries / transcripts found!\n";
+    print "$warn No suitable variant entries / transcripts found!\n";
     print "Input data:\n";
     print "Gene: $gene => ";
     dd $vars;
@@ -307,7 +322,7 @@ sub map_consequence {
          'ncRNA'                             => 'RNA',
     );
     if (! exists $map{$term})  {
-         print "WARNING: the Annovar Term does not map to any VEP consequence!\n";
+         print "$warn the Annovar Term does not map to any VEP consequence!\n";
          return "UNK";
      } else {
         return $map{$term};
