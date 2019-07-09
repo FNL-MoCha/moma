@@ -12,7 +12,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 
-my $version = '0.7.070119';
+my $version = '0.8.070919';
 
 use constant DEBUG => 0;
 use constant TRUE  => 1;
@@ -135,7 +135,7 @@ sub parse_annovar {
         # print "$debug Skipping some entries!\n";
 
         # NOTE: Just some basic obvious filters.
-        next if $var_data{'Func.refGeneWithVer'} =~ /(intronic|ncrna)/i;
+        next if $var_data{'Func.refGeneWithVer'} =~ /(intronic|ncrna|down)/i;
         next if $var_data{'ExonicFunc.refGeneWithVer'} =~ /\bsynonymous/i;
 
         # NOTE: MYO18A / TIAF is a bit tough to work with since they overlap. As
