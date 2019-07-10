@@ -12,14 +12,15 @@ use Term::ANSIColor;
 use Data::Dump;
 
 
-my $version = '0.9.070919';
+my $version = '0.10.071019';
 
 use constant DEBUG => 0;
 use constant TRUE  => 1;
 use constant FALSE => 0;
 
 my $scriptdir = dirname($0);
-my $cantran = "$scriptdir/../resource/refseq.txt";
+# my $cantran = "$scriptdir/../resource/refseq.txt";
+my $cantran = "$scriptdir/../resource/gene_reference.csv";
 
 my $scriptname = basename($0);
 my $description = <<"EOT";
@@ -72,7 +73,7 @@ if (@ARGV < 1) {
 my $annovar_file = shift;
 print "$warn is this an Annovar Output file?\n" unless $annovar_file =~ /txt$/;
 
-my %transcript_db = read_cantran($cantran);
+my $transcript_db = read_cantran($cantran);
 
 my $outfh;
 ($outfile = $annovar_file) =~ s/\.txt/.maf/ unless $outfile;
@@ -116,6 +117,7 @@ sub parse_annovar {
     # with later. Get rid of synonymous and intronic variants.
     my $annovar_file = shift;
     my @data;
+    my @not_in_okb_genes;
 
     open(my $fh, "<", $$annovar_file);
     my $header_line = readline($fh);
@@ -129,13 +131,18 @@ sub parse_annovar {
     while (my $line = <$fh>) {
         chomp(@var_data{@header} = split(/\t/, $line));
 
-        # XXX
+        # WES produces some interesting results.
+        next if $var_data{'ExonicFunc.refGeneWithVer'} =~ /unknown/i
+            && $var_data{'AAChange.refGeneWithVer'} =~ /UNKNOWN/i;
+
+        # DEBUG 
         # next unless $var_data{'Gene.refGeneWithVer'} eq 'CDKN2A';
         # print "$debug Skipping some entries!\n";
 
         # NOTE: Just some basic obvious filters.
-        my @unwanted_locations = qw(intronic ncrna downstream utr);
+        my @unwanted_locations = qw(intronic ncrna upstream downstream utr);
         next if grep { $var_data{'Func.refGeneWithVer'} =~ /$_/i } @unwanted_locations;
+        # next if grep { $_ =~ /$var_data{'Func.refGeneWithVer'}/i } @unwanted_locations;
         next if $var_data{'ExonicFunc.refGeneWithVer'} =~ /\bsynonymous/i;
 
         # NOTE: MYO18A / TIAF is a bit tough to work with since they overlap. As
@@ -144,30 +151,41 @@ sub parse_annovar {
         # and revisit later if the data improve.
         if ($var_data{'Gene.refGeneWithVer'} eq 'TIAF1;MYO18A') {
             print( "Skipping $var_data{'Gene.refGeneWithVer'} since we don't ",
-                 "know about oncogenicity and mapping of these vars.\n");
-             next;
-         }
+                "know about oncogenicity and mapping of these vars.\n");
+            next;
+        }
 
-         # NOTE: Genes U2AF1 and U2AF1L5 completely overlap and we can get the
-         # Annovar Gene1;Gene2 notation just like with MYO18A above.  Just keep
-         # the U2AF1 entries since we have hotspots specifically for that gene.
-         if ($var_data{'Gene.refGeneWithVer'} eq 'U2AF1;U2AF1L5') {
-             print("Got U2AF1;U2AF1L5 entry. Selecting U2AF1 from list.\n");
-             $var_data{'Gene.refGeneWithVer'} = 'U2AF1';
-             my @tx_data;
-             ($var_data{'AAChange.refGeneWithVer'} ne '.') 
-                 ? (@tx_data = split(/,/, $var_data{'AAChange.refGeneWithVer'}))
-                 : (@tx_data = split(/;/, $var_data{'GeneDetail.refGeneWithVer'}));
-             my @selected = grep { /U2AF1\b/ } @tx_data;
-             $var_data{'AAChange.refGeneWithVer'} = join(',', @selected);
-             # dd \@selected;
-             # __exit__(__LINE__);
-         }
+        # NOTE: Genes U2AF1 and U2AF1L5 completely overlap and we can get the
+        # Annovar Gene1;Gene2 notation just like with MYO18A above.  Just keep
+        # the U2AF1 entries since we have hotspots specifically for that gene.
+        if ($var_data{'Gene.refGeneWithVer'} eq 'U2AF1;U2AF1L5') {
+            print("Got U2AF1;U2AF1L5 entry. Selecting U2AF1 from list.\n");
+            $var_data{'Gene.refGeneWithVer'} = 'U2AF1';
+            my @tx_data;
+            ($var_data{'AAChange.refGeneWithVer'} ne '.') 
+                ? (@tx_data = split(/,/, $var_data{'AAChange.refGeneWithVer'}))
+                : (@tx_data = split(/;/, $var_data{'GeneDetail.refGeneWithVer'}));
+            my @selected = grep { /U2AF1\b/ } @tx_data;
+            $var_data{'AAChange.refGeneWithVer'} = join(',', @selected);
+        }
 
-         my $parsed_data = translate_annovar(\%var_data);
-         ($parsed_data eq 0)
-             ? print "Skipping entry.\n"
-             : push(@data, {%var_data, %$parsed_data});
+        # If we can't find the gene in the reference, then it is not in OncoKB
+        # and we will not report on it. Store in an array to avoid reporing
+        # duplicates.
+        next if grep { $var_data{'Gene.refGeneWithVer'} eq $_ } @not_in_okb_genes;
+
+        if ( ! exists $transcript_db->{$var_data{'Gene.refGeneWithVer'}} ) {
+            # print("$info $var_data{'Gene.refGeneWithVer'} is not in OncoKB. ",
+                # "Skipping this entry.\n");
+            push(@not_in_okb_genes, $var_data{'Gene.refGeneWithVer'});
+            next;
+        }
+
+        my $parsed_data = translate_annovar(\%var_data);
+        push(@data, {%var_data, %$parsed_data}) if $parsed_data ne 0;
+        # ($parsed_data eq 0)
+            # ? print "Skipping entry.\n"
+            # : push(@data, {%var_data, %$parsed_data});
     }
     print "$info Total parsed and retained variants: " . scalar(@data) . "\n";
     return \@data;
@@ -262,19 +280,21 @@ sub map_transcript {
             print "Gene: $gene; type: $type; candidate: $candidate\n";
             dd \@elems;
             print $msg;
+            # print "Skipping for now....this is a temporary fix!\n";
+            # next;
             exit 1;
         };
         
         if ($type eq 'noncoding' || $type eq 'splicesite') {
             my $tx_root = (split(/\./, $elems[0]))[0];
-            if ($transcript_db{$gene} =~ /$tx_root/) {
+            if ($transcript_db->{$gene}{'RefSeq'} =~ /$tx_root/) {
                 if ($type eq 'noncoding')  {
                     @fields{qw(Hugo_Symbol Transcript_ID HGVSc)} = (
-                        $gene, $transcript_db{$gene}, $elems[1]
+                        $gene, $transcript_db->{$gene}{'RefSeq'}, $elems[1]
                     );
                 } else {
                     @fields{qw(Hugo_Symbol Transcript_ID Exon_Number HGVSc)} = (
-                        $gene, $transcript_db{$gene}, @elems[1,2]
+                        $gene, $transcript_db->{$gene}{'RefSeq'}, @elems[1,2]
                     );
                 }
                 return \%fields;
@@ -282,8 +302,8 @@ sub map_transcript {
         } else {
             $gene = $elems[0];
             my $tx_root = (split(/\./, $elems[1]))[0];
-            if ($transcript_db{$gene} =~ /$tx_root/) {
-                $elems[1] = $transcript_db{$gene};
+            if ($transcript_db->{$gene}{'RefSeq'} =~ /$tx_root/) {
+                $elems[1] = $transcript_db->{$gene}{'RefSeq'};
                 my @field_order = qw(Hugo_Symbol Transcript_ID Exon_Number HGVSc
                     HGVSp_Short);
                 @fields{@field_order} = @elems;
@@ -294,11 +314,14 @@ sub map_transcript {
     }
 
     # If we got here, then we couldn't find a transcript that was in our DB.
+    print '-'x50, "\n";
     print "$warn No suitable variant entries / transcripts found!\n";
-    print "Input data:\n";
-    print "Gene: $gene => ";
-    dd $vars;
-
+    print "  Var candidate(s):\n\t  $gene => [\n";
+    print "\t\t$_\n" for @$vars;
+    print "\n\t  ]\n";
+    print "  Primary Transcript: $transcript_db->{$gene}{'RefSeq'}\n"; 
+    print "Skipping entry.\n";
+    print '-'x50, "\n";
     return \%fields;
 }
 
@@ -311,6 +334,7 @@ sub map_consequence {
          'framshift block substitution'      => "???",
          'nonframeshift deletion'            => 'In_Frame_Del',
          'nonframeshift insertion'           => 'In_Frame_Ins',
+         'nonframeshift substitution'        => 'Missense_Mutation', # Don't have MNV category.
          'nonframeshift block substitution'  => '???',
          'nonsynonymous SNV'                 => 'Missense_Mutation',
          'stopgain'                          => 'Nonsense_Mutation',
@@ -322,7 +346,8 @@ sub map_consequence {
          'ncRNA'                             => 'RNA',
     );
     if (! exists $map{$term})  {
-         print "$warn the Annovar Term does not map to any VEP consequence!\n";
+         print("$warn the Annovar Term '$term' does not map to any VEP ",
+             "consequence!\n");
          return "UNK";
      } else {
         return $map{$term};
@@ -332,15 +357,20 @@ sub map_consequence {
 sub read_cantran {
     # Read in the refseq file and output a hash that we can use to filter data
     # to the primary transcript. 
-     
-    # NOTE: We have all genes, even rna and noncoding genes in this original
-    # file, and we'll just keep them.  Also, there may be more than 1 transcript
-    # per gene in the file (the canonical transcript changed for some genes in
-    # some cases).  Keep all transcripts and filter on both later on.
     my $txfile = shift;
     die ("ERROR: Can not find the transcript file: '$txfile'!\n") unless -e $txfile;
+
+    my %tx_db;
     open (my $fh, "<", $txfile);
-    return map{ chomp; split(/,/, $_, 2) } grep { ! /^#/ } <$fh>;
+    # return map{ chomp; split(/,/, $_, 2) } grep { ! /^#/ } <$fh>;
+    my $tx_version = readline($fh);
+    print "$info Gene and Transcript DB version: $tx_version";
+    chomp(my @header = split(/,/, readline($fh)));
+    while (<$fh>) {
+        chomp(my @elems = split(/,/, $_));
+        @{$tx_db{$elems[3]}}{@header} = @elems;
+    }
+    return \%tx_db;
 }
 
 sub __exit__ {
