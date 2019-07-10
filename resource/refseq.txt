@@ -1,5 +1,5 @@
-# Version: 2.0
-# Date: 2018-09-11
+# Version: 3.0
+# Date: 2019-07-09
 # Origin is v4.4, v5.0, and v5.2 of IR.  Some genes have more than one 
 # transcript since it seems that the canonical transcript has changed over time.
 # Also, and very strangely, one gene, ACVRL1, does not even have a canoncial
@@ -24,6 +24,7 @@ AXL,NM_021913.4
 BAP1,NM_004656.3
 BCL2L1,NM_138578.1
 BCL9,NM_004326.3
+BIRC2,NM_001256166.1
 BRAF,NM_004333.4
 BRCA1,NM_007300.3
 BRCA2,NM_000059.3
