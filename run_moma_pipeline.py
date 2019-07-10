@@ -22,22 +22,24 @@ from natsort import natsorted
 from lib import logger
 from lib import utils # noqa
 
-version = '1.8.20190708-dev1'
+version = '1.8.20190709-dev2'
 
 # Globals
 output_root = os.getcwd()
 package_root = os.path.dirname(__file__)
 scripts_dir = os.path.join(package_root, 'scripts')
-resources = os.path.join(package_root, 'resource')
 lib = os.path.join(package_root, 'lib')
-oncokb_cnv_file = os.path.join(package_root, 'resource', 'oncokb_cnv_lookup.tsv')
-oncokb_fusion_lookup = os.path.join(package_root, 'resource',
-        'oncokb_fusion_genes.tsv')
 
-debug = True
+resources = os.path.join(package_root, 'resource')
+oncokb_cnv_file = os.path.join(resources, 'oncokb_cnv_lookup.tsv')
+oncokb_fusion_lookup = os.path.join(resources, 'oncokb_fusion_genes.tsv')
+blacklist_file = os.path.join(resources, 'blacklist')
+
+#debug = False
 
 logfile = 'moma_reporter_{}.log'.format(utils.today())
 logger = logger.Logger(loglevel='debug', colored_output=True, dest=logfile)
+
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
@@ -46,6 +48,13 @@ def get_args():
         metavar="<VCF File>",
         help='VCF file on which to run the analysis. VCF files must be derived '
             'from the Ion Torrent TVC plugin.'
+    )
+    parser.add_argument(
+        '--source',
+        required=True,
+        choices=['oca', 'wes', 'tso500'],
+        help='Type of data being loaded. Will determine what steps and script '
+            'are necessary to process these data.'
     )
     parser.add_argument(
         '-g', '--genes', 
@@ -222,18 +231,29 @@ def run(cmd, task, ret_data=False):
 
     return data
 
+def __load_blacklist():
+    with open(blacklist_file) as fh:
+        return [line.split()[0] for line in fh]
+
 def __marry_oncokb_data(annovar_file, annotated_maf):
     """
     Add the oncokb annotations to the annovar data so that we can use this in
     the report generation step later on.  
     """
     final_data = defaultdict(dict)
+    blacklist_vars = __load_blacklist()
 
     with open(annotated_maf) as amaf_fh:
         header = amaf_fh.readline().rstrip('\n').split('\t')
         for line in amaf_fh:
             data = line.rstrip('\n').split('\t')
             varid = ':'.join(itemgetter(*[1,2,4,5])(data))
+
+            # Check to see if variant is in blacklist
+            if varid in blacklist_vars:
+                logger.write_log('', 'Removing variant {}:{}:{} because it is '
+                    'blacklisted.'.format(data[0], data[8], varid))
+                continue
             final_data[varid] = dict(zip(header, data))
 
     with open(annovar_file) as annovar_fh:
@@ -295,7 +315,8 @@ def oncokb_annotate(annovar_file):
     run(oncokb_annot_cmd, 'MoCha OncoKB MOI Annotator')
 
     # Marry the new OncoKB annotations with the original Annovar Data.
-    logger.write_log('info', 'Marrying OncoKB data to Annovar data.')
+    logger.write_log('info', 'Combining Annovar data with OncoKB annotations, '
+        'and running blacklist.')
     return(__marry_oncokb_data(annovar_file, annotated_maf))
 
 def gen_cnv_report(vcf, cu, cl, genelist, outfile):
@@ -454,26 +475,18 @@ def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
             outfh.write(f'\n\n:::  CNV Data Report for {sample_name}  :::\n')
             var_data = __read_report(cnv_report)
             outfh.write('\n'.join(var_data))
-            #  if (var_data) == 1:
-                #  outfh.write(f'{var_data[0]}\nNo CNVs found.\n')
-            #  else:
-                #  outfh.write('\n'.join(var_data))
 
         if fusion_report is not None:
             outfh.write(f'\n\n::: Fusion Data Report for {sample_name}  :::\n')
             var_data = __read_report(fusion_report)
             outfh.write('\n'.join(var_data))
-            #  if len(var_data) == 1:
-                #  outfh.write(f'{var_data[0]}\nNo Fuions found.\n')
-            #  else:
-                #  outfh.write('\n'.join(var_data))
 
 def __read_report(report):
     with open(report) as fh:
         return [line.rstrip('\n') for line in fh]
 
-def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
-        outdir, quiet, keep_intermediate_files):
+def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
+        reads, outdir, quiet, keep_intermediate_files):
 
     pipeline_version = ''
     with open(os.path.join(package_root, '_version.py')) as fh:
@@ -485,7 +498,7 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
     # Create an output directory based on the sample_name
     if sample_name is None:
         sample_name = get_name_from_vcf(vcf)
-    logger.write_log('info', f'Sample Name is: {sample_name}')
+    logger.write_log('info', f'Processing sample: {sample_name}')
         
     outdir_path = os.path.abspath(output_root)
     if outdir is None:
@@ -499,10 +512,15 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
         os.mkdir(os.path.abspath(outdir_path), 0o755)
 
     # Simplify the VCF
-    logger.write_log('info', 'Simplifying the VCF file.')
-    num_vars, simple_vcf = simplify_vcf(vcf, outdir_path)
-    logger.write_log('info', 'Done simplifying VCF file. There are %s variants'
-            ' in this specimen.' % str(num_vars))
+    if data_source == 'oca':
+        logger.write_log('info', 'Simplifying the VCF file.')
+        num_vars, simple_vcf = simplify_vcf(vcf, outdir_path)
+        logger.write_log('info', 'Done simplifying VCF file. There are %s '
+            'variants in this specimen.' % str(num_vars))
+    else:
+        logger.write_log('info', 'VCF already ready for processing with '
+            'Annovar.')
+        simple_vcf = vcf
 
     # Annotate the vcf with ANNOVAR.
     logger.write_log('info', 'Annotating the simplified VCF file with Annovar.')
@@ -511,7 +529,7 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
     # Implement the MOMA here.
     logger.write_log('info', 'Running OncoKB Filter rules on data to look for '
             'oncogenic variants.')
-    oncokb_annotated_data = oncokb_annotate(annovar_file)
+    oncokb_annotated_data = oncokb_annotate(annovar_file) 
 
     # Generate a filtered CSV file of results for the report.
     mutation_report = os.path.join(outdir_path, 
@@ -551,8 +569,8 @@ def main(vcf, sample_name, genes, get_cnvs, cu, cl, get_fusions, reads,
     if not keep_intermediate_files:
         for f in contents:
             if any(f.endswith(x) for x in ('truncmaf', 'avinput')):
-                logger.write_log('debug', f'Removing {f}.')
-                os.remove(f)
+                    logger.write_log('debug', f'Removing {f}.')
+                    os.remove(f)
     # Move our logfile into the output dir now that we're done.
     shutil.move(os.path.abspath(logfile), os.path.join(outdir_path, logfile))
 
@@ -571,5 +589,5 @@ if __name__ == '__main__':
     else:
         genelist = args.genes.split(',')
 
-    main(args.vcf, args.name, genelist, args.CNV, args.cu, args.cl, 
+    main(args.vcf, args.source, args.name, genelist, args.CNV, args.cu, args.cl, 
             args.Fusion, args.reads, args.outdir, args.quiet, args.keep)
