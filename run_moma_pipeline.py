@@ -31,9 +31,9 @@ scripts_dir = os.path.join(package_root, 'scripts')
 lib = os.path.join(package_root, 'lib')
 
 resources = os.path.join(package_root, 'resource')
-oncokb_cnv_file = os.path.join(resources, 'oncokb_cnv_lookup.tsv')
-oncokb_fusion_lookup = os.path.join(resources, 'oncokb_fusion_genes.tsv')
-blacklist_file = os.path.join(resources, 'blacklist')
+oncokb_cnv_file = os.path.join(resources, 'moma_cnv_lookup.tsv')
+oncokb_fusion_lookup = os.path.join(resources, 'moma_fusion_genes.tsv')
+blacklist_file = os.path.join(resources, 'blacklisted_vars.txt')
 
 #debug = False
 

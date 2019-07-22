@@ -24,13 +24,14 @@ use constant DEBUG => 0;
 use constant TRUE => 1;
 use constant FALSE => 0;
 
-my $version = "v0.30.062719";
+my $version = "v0.31.071119";
 my $scriptdir = dirname($0);
 
 # Default lookup files.
-my $tsg_file = "$scriptdir/../resource/tsg_gene_list.txt";
+# my $tsg_file = "$scriptdir/../resource/tsg_gene_list.txt";
+my $tsg_file = "$scriptdir/../resource/gene_reference.csv";
 my $hs_bed = "$scriptdir/../resource/mocha_tso500_ctdna_hotspots_v1.072018.bed";
-my $oncokb_file = "$scriptdir/../resource/oncokb_lookup.txt";
+my $oncokb_file = "$scriptdir/../resource/moma_hotspot_lookup.txt";
 
 for my $resource_file ($tsg_file, $hs_bed, $oncokb_file) {
     die "ERROR: Can not locate necessary resource file '$resource_file'! ",
@@ -211,6 +212,8 @@ if ($annot_method eq 'hs_bed') {
 # Load up TSGs for the non-hs rules
 $logger->info("Using TSG file " . basename($tsg_file));
 my $tsgs = read_tsgs($tsg_file);
+# dd \$tsgs;
+# exit;
 
 # Process each MAF file
 for my $maf_file (@ARGV) {
@@ -469,11 +472,14 @@ sub map_variant_oncokb {
 }
 
 sub read_tsgs {
+    # Return a list of TSGs based on our OncoKB reference file.
     open(my $fh, "<", $tsg_file);
-    readline($fh); # Throw out header.
     my $tsg_version = (split(' ', readline($fh)))[1];
-    $logger->info("TSG lookup version: $tsg_version");
-    return [map{ chomp; $_} <$fh>];
+    $logger->info("$info TSG lookup version: $tsg_version");
+
+    readline($fh); # Throw out header.
+    # return [map{ chomp; $_} <$fh>];
+    return [map{ $_ =~ /Yes$/ ? ((split(/,/, $_))[3]) : () } <$fh>];
 }
 
 sub run_nonhs_rules {
@@ -631,6 +637,19 @@ sub run_nonhs_rules {
         return ("FLT3 TyrK Domain mutions", "Likely Oncogenic", 
             "Likely Gain-of-function");
     }
+    #TERT Promoter Mutations
+    #TODO: Add this rule.
+    # elsif ($gene eq 'TERT' && ()) {
+        # $moi_count->{'TERT Promoter Mutations'}++;
+        # return('TERT Promoter Mutations', 'Oncogenic', 'Gain-of-function');
+    # }
+    
+    # MET exon 14 splice variants.
+    # TODO: Add this rule.
+    # elsif ($gene eq 'MET') {
+        # $moi_count->{'MET exon14 splice variants'}++;
+        # return('MET exon14 splice variants', 'Oncogenic', 'Gain-of-function');
+    # }
     return ($moi_type, '.', '.');
 }
 
