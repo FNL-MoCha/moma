@@ -12,14 +12,13 @@ use Term::ANSIColor;
 use Data::Dump;
 
 
-my $version = '0.10.071019';
+my $version = '0.11.072219';
 
 use constant DEBUG => 0;
 use constant TRUE  => 1;
 use constant FALSE => 0;
 
 my $scriptdir = dirname($0);
-# my $cantran = "$scriptdir/../resource/refseq.txt";
 my $cantran = "$scriptdir/../resource/gene_reference.csv";
 
 my $scriptname = basename($0);
@@ -96,7 +95,6 @@ sub print_data {
          Exon_Number Variant_Classification ExAC_AF ExAC_AF_AFR ExAC_AF_AMR 
          ExAC_AF_EAS ExAC_AF_FIN ExAC_AF_OTH ExAC_AF_SAS);
 
-
     print {$outfh} "#version 2.4\n";
     print {$outfh} join("\t", @header_order), "\n";
 
@@ -121,7 +119,9 @@ sub parse_annovar {
 
     open(my $fh, "<", $$annovar_file);
     my $header_line = readline($fh);
-    chomp(my @header = split(/\t/, $header_line));
+    chomp(my @tmp_header = split(/\t/, $header_line));
+
+    my @header = map{ (split(/\./, $_))[0] } @tmp_header;
 
     # Add in header names for the rest of the "Otherinfo" columns
     @header = (@header, qw(otherinfo2 otherinfo3 vcf_chr vcf_pos vcf_varid 
@@ -132,8 +132,8 @@ sub parse_annovar {
         chomp(@var_data{@header} = split(/\t/, $line));
 
         # WES produces some interesting results.
-        next if $var_data{'ExonicFunc.refGeneWithVer'} =~ /unknown/i
-            && $var_data{'AAChange.refGeneWithVer'} =~ /UNKNOWN/i;
+        next if $var_data{'ExonicFunc'} =~ /unknown/i 
+            && $var_data{'AAChange'} =~ /UNKNOWN/i;
 
         # DEBUG 
         # next unless $var_data{'Gene.refGeneWithVer'} eq 'CDKN2A';
@@ -141,16 +141,15 @@ sub parse_annovar {
 
         # NOTE: Just some basic obvious filters.
         my @unwanted_locations = qw(intronic ncrna upstream downstream utr);
-        next if grep { $var_data{'Func.refGeneWithVer'} =~ /$_/i } @unwanted_locations;
-        # next if grep { $_ =~ /$var_data{'Func.refGeneWithVer'}/i } @unwanted_locations;
-        next if $var_data{'ExonicFunc.refGeneWithVer'} =~ /\bsynonymous/i;
+        next if grep { $var_data{'Func'} =~ /$_/i } @unwanted_locations;
+        next if $var_data{'ExonicFunc'} =~ /\bsynonymous/i;
 
         # NOTE: MYO18A / TIAF is a bit tough to work with since they overlap. As
         # of now, there is not much data in OncoKB, My Cancer Genome, ExAC, etc.
         # suggesting oncogenicity / actionability.  We'll skip these for now,
         # and revisit later if the data improve.
-        if ($var_data{'Gene.refGeneWithVer'} eq 'TIAF1;MYO18A') {
-            print( "Skipping $var_data{'Gene.refGeneWithVer'} since we don't ",
+        if ($var_data{'Gene'} eq 'TIAF1;MYO18A') {
+            print( "Skipping $var_data{'Gene'} since we don't ",
                 "know about oncogenicity and mapping of these vars.\n");
             next;
         }
@@ -158,26 +157,26 @@ sub parse_annovar {
         # NOTE: Genes U2AF1 and U2AF1L5 completely overlap and we can get the
         # Annovar Gene1;Gene2 notation just like with MYO18A above.  Just keep
         # the U2AF1 entries since we have hotspots specifically for that gene.
-        if ($var_data{'Gene.refGeneWithVer'} eq 'U2AF1;U2AF1L5') {
+        if ($var_data{'Gene'} eq 'U2AF1;U2AF1L5') {
             print("Got U2AF1;U2AF1L5 entry. Selecting U2AF1 from list.\n");
-            $var_data{'Gene.refGeneWithVer'} = 'U2AF1';
+            $var_data{'Gene'} = 'U2AF1';
             my @tx_data;
-            ($var_data{'AAChange.refGeneWithVer'} ne '.') 
-                ? (@tx_data = split(/,/, $var_data{'AAChange.refGeneWithVer'}))
-                : (@tx_data = split(/;/, $var_data{'GeneDetail.refGeneWithVer'}));
+            ($var_data{'AAChange'} ne '.') 
+                ? (@tx_data = split(/,/, $var_data{'AAChange'}))
+                : (@tx_data = split(/;/, $var_data{'GeneDetail'}));
             my @selected = grep { /U2AF1\b/ } @tx_data;
-            $var_data{'AAChange.refGeneWithVer'} = join(',', @selected);
+            $var_data{'AAChange'} = join(',', @selected);
         }
 
         # If we can't find the gene in the reference, then it is not in OncoKB
         # and we will not report on it. Store in an array to avoid reporing
         # duplicates.
-        next if grep { $var_data{'Gene.refGeneWithVer'} eq $_ } @not_in_okb_genes;
+        next if grep { $var_data{'Gene'} eq $_ } @not_in_okb_genes;
 
-        if ( ! exists $transcript_db->{$var_data{'Gene.refGeneWithVer'}} ) {
+        if ( ! exists $transcript_db->{$var_data{'Gene'}} ) {
             # print("$info $var_data{'Gene.refGeneWithVer'} is not in OncoKB. ",
                 # "Skipping this entry.\n");
-            push(@not_in_okb_genes, $var_data{'Gene.refGeneWithVer'});
+            push(@not_in_okb_genes, $var_data{'Gene'});
             next;
         }
 
@@ -200,12 +199,12 @@ sub translate_annovar {
 
     my %results;
     my %translator = (
-        'Gene.refGene'  => 'Hugo_Symbol',
-        'Chr'           => 'Chromosome',
-        'Start'         => 'Start_Position',
-        'End'           => 'End_Position',
-        'Ref'           => 'Reference_Allele',
-        'Alt'           => 'Tumor_Seq_Allele2',
+        'Gene'  => 'Hugo_Symbol',
+        'Chr'   => 'Chromosome',
+        'Start' => 'Start_Position',
+        'End'   => 'End_Position',
+        'Ref'   => 'Reference_Allele',
+        'Alt'   => 'Tumor_Seq_Allele2',
     );
 
     while (my ($k,$v) = each %translator) {
@@ -213,29 +212,27 @@ sub translate_annovar {
     }
 
     my $ret_data;
-    if ($var_data->{'AAChange.refGeneWithVer'} ne '.') {
+    if ($var_data->{'AAChange'} ne '.') {
         # We have a coding sequence variant.
-        my @vars = split(/,/, $var_data->{'AAChange.refGeneWithVer'});
+        my @vars = split(/,/, $var_data->{'AAChange'});
         $ret_data = map_transcript(\@vars, 'coding', undef);
         $ret_data->{'Variant_Classification'} = map_consequence(
-            $var_data->{'ExonicFunc.refGeneWithVer'}
+            $var_data->{'ExonicFunc'}
         );
     } else {
         # We have a non-coding variant.
-        my @vars = split(/;/, $var_data->{'GeneDetail.refGeneWithVer'});
-        if ($var_data->{'Func.refGeneWithVer'} eq 'splicing') {
+        my @vars = split(/;/, $var_data->{'GeneDetail'});
+        if ($var_data->{'Func'} eq 'splicing') {
             # Have a splice variant.
-            $ret_data = map_transcript(\@vars, 'splicesite',
-                $var_data->{'Gene.refGeneWithVer'});
+            $ret_data = map_transcript(\@vars, 'splicesite', $var_data->{'Gene'});
         } else {
-            $ret_data = map_transcript(\@vars, 'noncoding',
-                $var_data->{'Gene.refGeneWithVer'});
+            $ret_data = map_transcript(\@vars, 'noncoding', $var_data->{'Gene'});
         }
         if ($ret_data->{'Exon_Number'} eq '-') {
-            $ret_data->{'Exon_Number'} = $var_data->{'Func.refGeneWithVer'};
+            $ret_data->{'Exon_Number'} = $var_data->{'Func'};
         }
         $ret_data->{'Variant_Classification'} = map_consequence(
-            $var_data->{'Func.refGeneWithVer'}
+            $var_data->{'Func'}
         );
     }
     return FALSE if $ret_data->{'Transcript_ID'} eq '-';
@@ -250,7 +247,6 @@ sub translate_annovar {
     my @pop_data = map { ($_ eq '.') ? '' : $_ } @{$var_data}{@annovar_exac_header};
     # @results{@maf_exac_header} = @{$var_data}{@annovar_exac_header};
     @results{@maf_exac_header} = @pop_data;
-
 
     if (DEBUG) {
         print '-'x50, "\n";
