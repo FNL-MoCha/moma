@@ -35,8 +35,11 @@ $ANNOVAR_ROOT/table_annovar.pl \
     -polish \
     -remove \
     -nastring . \
-    -protocol refGeneWithVer,cosmic85,dbnsfp35a,clinvar_20190305,popfreq_all_20150413 \
+    -protocol trunc_refGene,cosmic85,dbnsfp35a,clinvar_20190305,popfreq_all_20150413 \
     -operation g,f,f,f,f \
-    -argument '-hgvs,-hgvs,-hgvs,-hgvs,-hgvs' \
+    -argument '-hgvs -splicing_threshold 5,-hgvs,-hgvs,-hgvs,-hgvs' \
     -vcfinput $vcf \
     $ANNOVAR_DB \
+
+#-argument '-hgvs -splicing_threshold 5 -exonicsplicing,-hgvs,-hgvs,-hgvs,-hgvs' \
+# -protocol trunc_refGene,cosmic85,dbnsfp35a,clinvar_20190305,popfreq_all_20150413 \
