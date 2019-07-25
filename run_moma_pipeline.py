@@ -22,7 +22,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils # noqa
 
-version = '1.8.20190709-dev2'
+version = '1.8.20190725-dev3'
 
 # Globals
 output_root = os.getcwd()
@@ -183,18 +183,23 @@ def generate_report(annovar_data, genes, outfile):
     Process the OncoKB annotated Annovar data to filter out data by gene, 
     population frequency, and any other filter.
     """
+
+    # XXX
+    #  pp(annovar_data)
+    #  utils.__exit__()
+
     with open(outfile, 'w') as outfh:
         csv_writer = csv.writer(outfh, lineterminator="\n", delimiter=",")
         wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
-            'Tumor_Seq_Allele2', 'vaf', 'Hugo_Symbol', 'Transcript_ID', 'HGVSc',
-            'HGVSp_Short', 'Exon_Number', 'Variant_Classification', 'sift', 
-            'polyphen', 'CLNSIG', 'CLNREVSTAT', 'MOI_Type', 
-            'Oncogenicity', 'Effect')
+            'Tumor_Seq_Allele2', 'vaf', 'avsnp142', 'cosid', 'Hugo_Symbol', 
+            'Transcript_ID', 'HGVSc', 'HGVSp_Short', 'Exon_Number', 
+            'Variant_Classification', 'sift', 'polyphen', 'CLNSIG', 'CLNREVSTAT',
+            'MOI_Type', 'Oncogenicity', 'Effect')
 
-        csv_writer.writerow(('Chr', 'Pos', 'Ref', 'Alt', 'VAF', 'Gene',
-            'Transcript', 'CDS', 'AA', 'Location', 'Function', 'Sift', 'Polyphen',
-            'Clinvar_Significance', 'Clinvar_Review_Status', 'MOI_Type', 
-            'Oncogenicity', 'Effect'))
+        csv_writer.writerow(('Chr', 'Pos', 'Ref', 'Alt', 'VAF', 'dbSNP_Id',
+            'COSMIC_Id', 'Gene', 'Transcript', 'CDS', 'AA', 'Location', 
+            'Function', 'Sift', 'Polyphen', 'Clinvar_Significance', 
+            'Clinvar_Review_Status', 'MOI_Type', 'Oncogenicity', 'Effect'))
 
         for var in natsorted(annovar_data.keys(), 
                 key=lambda k: (k.split(':')[0], k.split(':')[1])):
@@ -235,7 +240,7 @@ def __load_blacklist():
     with open(blacklist_file) as fh:
         return [line.split()[0] for line in fh]
 
-def __marry_oncokb_data(annovar_file, annotated_maf):
+def __marry_oncokb_data(annovar_file, annotated_maf, source):
     """
     Add the oncokb annotations to the annovar data so that we can use this in
     the report generation step later on.  
@@ -256,6 +261,8 @@ def __marry_oncokb_data(annovar_file, annotated_maf):
                 continue
             final_data[varid] = dict(zip(header, data))
 
+    # TODO: Use 'source' info to correctly calculate the VAF for each.
+    # Different for OCA compared to TSO500 or WES
     with open(annovar_file) as annovar_fh:
         header = annovar_fh.readline().rstrip('\n').split('\t')
         for line in annovar_fh:
@@ -263,14 +270,30 @@ def __marry_oncokb_data(annovar_file, annotated_maf):
             varid = ':'.join(itemgetter(*[0,1,3,4])(data))
             if varid in final_data:
                 new = {
-                    'sift'       : __translate(data[13]),
-                    'polyphen'   : __translate(data[16]),
-                    'vaf'        : __get_vaf(data[115]),
+                    'sift'       : __translate(data[14]),
+                    'polyphen'   : __translate(data[17]),
+                    'vaf'        : __get_vaf(data[116]),
                     'CLNREVSTAT' : data[84],
                     'CLNSIG'     : data[85],
+                    'cosid'      : __get_cosmic_id(data[10])
                 }
                 final_data[varid].update(new)
+    #  pp(final_data)
+    #  utils.__exit__()
     return dict(final_data)
+
+def __get_cosmic_id(cosmic_data):
+    """
+    Get the COSMIC ID for the variant if one in Annovar. The issue is that there
+    can be more than one per variant, and we have to try to map it adequately.
+    """
+    #  cosids, rest = cosmic_data.split(';')
+    #  print(f'ids: {cosids} <> occurances: {rest}')
+    if cosmic_data == '.':
+        return '.'
+    #  pp(cosmic_data.split(';'))
+    cosid, occurance = cosmic_data.split(';')
+    return cosid.strip('ID=')
 
 def __translate(string):
     sp_conversion = {
@@ -285,7 +308,7 @@ def __translate(string):
 def __get_vaf(vafstr):
     return vafstr.split(';')[0].split('=')[1]
 
-def oncokb_annotate(annovar_file):
+def oncokb_annotate(annovar_file, source):
     """
     Create a temp file that our TSO500, OncoKB driven annotator can use and
     annotate using those rules.  Those annotations will be added to the dataset
@@ -317,7 +340,7 @@ def oncokb_annotate(annovar_file):
     # Marry the new OncoKB annotations with the original Annovar Data.
     logger.write_log('info', 'Combining Annovar data with OncoKB annotations, '
         'and running blacklist.')
-    return(__marry_oncokb_data(annovar_file, annotated_maf))
+    return(__marry_oncokb_data(annovar_file, annotated_maf, source))
 
 def gen_cnv_report(vcf, cu, cl, genelist, outfile):
     """
@@ -508,6 +531,8 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     logger.write_log('debug', 
             f'Selected destination dir for data is: {outdir_path}')
 
+    #  """
+    #XXX Add back in!
     if not os.path.exists(outdir_path):
         os.mkdir(os.path.abspath(outdir_path), 0o755)
 
@@ -525,11 +550,19 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     # Annotate the vcf with ANNOVAR.
     logger.write_log('info', 'Annotating the simplified VCF file with Annovar.')
     annovar_file = run_annovar(simple_vcf)
+    #  """
+
+    # TODO: Remove this.
+    #  annovar_file = vcf
 
     # Implement the MOMA here.
     logger.write_log('info', 'Running OncoKB Filter rules on data to look for '
             'oncogenic variants.')
-    oncokb_annotated_data = oncokb_annotate(annovar_file) 
+    oncokb_annotated_data = oncokb_annotate(annovar_file, data_source) 
+
+    # XXX
+    #  pp(oncokb_annotated_data)
+    #  utils.__exit__()
 
     # Generate a filtered CSV file of results for the report.
     mutation_report = os.path.join(outdir_path, 
