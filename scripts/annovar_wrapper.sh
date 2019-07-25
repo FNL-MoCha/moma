@@ -1,6 +1,6 @@
 #!/bin/bash
 # Wrapper script to launch the Annovar pipeline.
-VERSION='1.2.20190614'
+VERSION='1.4.20190725'
 
 PLUGIN_DIR=$(dirname $(readlink -f $0) | sed 's/\/scripts//')
 ANNOVAR_ROOT="${PLUGIN_DIR}/lib/annovar/"
@@ -35,11 +35,8 @@ $ANNOVAR_ROOT/table_annovar.pl \
     -polish \
     -remove \
     -nastring . \
-    -protocol trunc_refGene,cosmic85,dbnsfp35a,clinvar_20190305,popfreq_all_20150413 \
-    -operation g,f,f,f,f \
-    -argument '-hgvs -splicing_threshold 5,-hgvs,-hgvs,-hgvs,-hgvs' \
+    -protocol trunc_refGene,cosmic89_noEnst,avsnp142,dbnsfp35a,clinvar_20190305,popfreq_all_20150413 \
+    -operation g,f,f,f,f,f \
+    -argument '-hgvs -splicing_threshold 5,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs' \
     -vcfinput $vcf \
     $ANNOVAR_DB \
-
-#-argument '-hgvs -splicing_threshold 5 -exonicsplicing,-hgvs,-hgvs,-hgvs,-hgvs' \
-# -protocol trunc_refGene,cosmic85,dbnsfp35a,clinvar_20190305,popfreq_all_20150413 \
