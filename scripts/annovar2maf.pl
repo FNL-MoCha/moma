@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
-# Convert an Annovar TSV file to a MAF file for use in other MAF related tools.
+# Convert an Annovar TSV file to a MAF-like file for use in other MAF related 
+# tools.
 # 6/17/2019 - D Sims
 ################################################################################
 use strict;
@@ -12,7 +13,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 
-my $version = '0.11.072219';
+my $version = '0.12.072519';
 
 use constant DEBUG => 0;
 use constant TRUE  => 1;
@@ -92,8 +93,9 @@ sub print_data {
     # Print the necessary MAF fields for the annotator
     my @header_order = qw(Hugo_Symbol Chromosome Start_Position End_Position 
          Reference_Allele Tumor_Seq_Allele2 Transcript_ID HGVSc HGVSp_Short 
-         Exon_Number Variant_Classification ExAC_AF ExAC_AF_AFR ExAC_AF_AMR 
-         ExAC_AF_EAS ExAC_AF_FIN ExAC_AF_OTH ExAC_AF_SAS);
+         Exon_Number avsnp142 Variant_Classification ExAC_AF 
+         ExAC_AF_AFR ExAC_AF_AMR ExAC_AF_EAS ExAC_AF_FIN ExAC_AF_OTH 
+         ExAC_AF_SAS);
 
     print {$outfh} "#version 2.4\n";
     print {$outfh} join("\t", @header_order), "\n";
