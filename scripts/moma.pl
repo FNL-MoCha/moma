@@ -649,7 +649,7 @@ sub run_nonhs_rules {
     # elsif ($gene eq 'MET') {
         # $moi_count->{'MET exon14 splice variants'}++;
         # return('MET exon14 splice variants', 'Oncogenic', 'Gain-of-function');
-    # }
+    # }:
     return ($moi_type, '.', '.');
 }
 

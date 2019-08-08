@@ -176,17 +176,12 @@ sub parse_annovar {
         next if grep { $var_data{'Gene'} eq $_ } @not_in_okb_genes;
 
         if ( ! exists $transcript_db->{$var_data{'Gene'}} ) {
-            # print("$info $var_data{'Gene.refGeneWithVer'} is not in OncoKB. ",
-                # "Skipping this entry.\n");
             push(@not_in_okb_genes, $var_data{'Gene'});
             next;
         }
 
         my $parsed_data = translate_annovar(\%var_data);
         push(@data, {%var_data, %$parsed_data}) if $parsed_data ne 0;
-        # ($parsed_data eq 0)
-            # ? print "Skipping entry.\n"
-            # : push(@data, {%var_data, %$parsed_data});
     }
     print "$info Total parsed and retained variants: " . scalar(@data) . "\n";
     return \@data;
@@ -247,7 +242,6 @@ sub translate_annovar {
     my @annovar_exac_header = qw(ExAC_ALL ExAC_AFR ExAC_AMR ExAC_EAS ExAC_FIN 
         ExAC_NFE ExAC_OTH ExAC_SAS);
     my @pop_data = map { ($_ eq '.') ? '' : $_ } @{$var_data}{@annovar_exac_header};
-    # @results{@maf_exac_header} = @{$var_data}{@annovar_exac_header};
     @results{@maf_exac_header} = @pop_data;
 
     if (DEBUG) {
@@ -344,7 +338,7 @@ sub map_consequence {
          'ncRNA'                             => 'RNA',
     );
     if (! exists $map{$term})  {
-         print("$warn the Annovar Term '$term' does not map to any VEP ",
+         print("$warn the Annovar Term '$term' does not map to any MAF ",
              "consequence!\n");
          return "UNK";
      } else {
