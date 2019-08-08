@@ -265,17 +265,20 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
     # Different for OCA compared to TSO500 or WES
     with open(annovar_file) as annovar_fh:
         header = annovar_fh.readline().rstrip('\n').split('\t')
+        header.extend(['Otherinfo1', 'Otherinfo2', 'vcf_chr', 'vcf_pos',
+            'vcf_id', 'vcf_ref', 'vcf_alt', 'vcf_qual', 'vcf_filter',
+            'vcf_info', 'vcf_format', 'vcf_sample'])
         for line in annovar_fh:
-            data = line.rstrip('\n').split('\t')
-            varid = ':'.join(itemgetter(*[0,1,3,4])(data))
+            data = dict(zip(header, line.rstrip('\n').split('\t')))
+            varid = ':'.join(itemgetter(*['Chr', 'Start', 'Ref', 'Alt'])(data))
             if varid in final_data:
                 new = {
-                    'sift'       : __translate(data[14]),
-                    'polyphen'   : __translate(data[17]),
-                    'vaf'        : __get_vaf(data[116]),
-                    'CLNREVSTAT' : data[84],
-                    'CLNSIG'     : data[85],
-                    'cosid'      : __get_cosmic_id(data[10])
+                    'sift'       : __translate(data['SIFT_pred']),
+                    'polyphen'   : __translate(data['Polyphen2_HDIV_pred']),
+                    'vaf'        : __get_vaf(data['vcf_info']),
+                    'CLNREVSTAT' : data['CLNREVSTAT'],
+                    'CLNSIG'     : data['CLNSIG'],
+                    'cosid'      : __get_cosmic_id(data['cosmic89_noEnst'])
                 }
                 final_data[varid].update(new)
     #  pp(final_data)
@@ -553,6 +556,7 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     #  """
 
     # TODO: Remove this.
+    #  sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}\u001b[0m\n\n'.format(decor='='*25))
     #  annovar_file = vcf
 
     # Implement the MOMA here.
@@ -592,6 +596,10 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
         logger.write_log('info', f'Writing report data to {cnv_report}.')
         gen_fusion_report(vcf, reads, genelist, fusion_report)
         logger.write_log('info', "Done with Fusions report.")
+
+    # TODO: Remove this.
+    #  sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
+    #  sys.exit()
 
     # Combine the three reports into one master report.
     combine_reports(sample_name, mutation_report, cnv_report, fusion_report, 
