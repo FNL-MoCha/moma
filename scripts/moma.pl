@@ -20,11 +20,12 @@ use Log::Log4perl qw(get_logger :levels);
 use DateTime;
 use Text::CSV;
 
-use constant DEBUG => 0;
 use constant TRUE => 1;
 use constant FALSE => 0;
 
-my $version = "v0.31.071119";
+my $DEBUG = 0;
+
+my $version = "v0.32.080919";
 my $scriptdir = dirname($0);
 
 # Default lookup files.
@@ -88,6 +89,7 @@ my $trim_file = 1;
 my $verbose;
 my $custom_logfile;
 my $wanted_popfreq;
+my $debugging = 0;
 
 GetOptions( 
     "annot|a=s"     => \$annot_method,
@@ -100,8 +102,9 @@ GetOptions(
     "Verbose|V"     => \$verbose,
     "help|h"        => \$help,
     "popfreq|p=s"   => \$wanted_popfreq,
-    "logfile|l=s"   => \$custom_logfile)
-or die $usage;
+    "logfile|l=s"   => \$custom_logfile,
+    "debug|d"       => \$debugging,  # Undocumented.
+) or die $usage;
 
 sub help {
 	printf "%s - %s\n\n%s\n\n%s\n", $scriptname, $version, $description, $usage;
@@ -137,7 +140,8 @@ unless ($annot_method) {
 }
 
 # Always going to want verbose output if we're doing debugging.
-$verbose = TRUE if DEBUG;
+$DEBUG = TRUE if $debugging;
+$verbose = TRUE if $DEBUG;
 
 # Configure a logger.
 my $logfile;
@@ -175,7 +179,7 @@ my $logger = get_logger();
 
 # Levels: DEBUG, INFO, WARN, ERROR, FATAL
 my $loglevel;
-(DEBUG) ? ($loglevel = 'DEBUG') : ($loglevel = 'INFO');
+($DEBUG) ? ($loglevel = 'DEBUG') : ($loglevel = 'INFO');
 $logger->level($loglevel);
 
 my $intro_str = sprintf("\n%s\n\t\t    Starting MoCha OncoKB MOI Annotation " . 
@@ -225,7 +229,7 @@ for my $maf_file (@ARGV) {
     my $new_file;
     ($outfile)
         ? ($new_file = $outfile)
-        : (($new_file = $maf_file) =~ s/\.maf/.annotated.maf/);
+        : (($new_file = $maf_file) =~ s/\.truncmaf/.annotated.maf/);
     $logger->info( "Finished annotating. Printing results..." );
     print_results($results, $new_file, $mois_only, $trim_file);
     $logger->info("Done with $maf_file!\n\n");
@@ -337,7 +341,8 @@ sub annotate_maf {
         @var_data{@$header} = @$elems;
 
         # DEBUG
-        # next unless $var_data{'Hugo_Symbol'} eq 'ID3';
+        #
+        next unless $var_data{'Hugo_Symbol'} eq 'KIT';
         $logger->debug("\n" . "-"x75 . "\n");
 
         # Filter out SNPs, Intronic Variants, etc.
@@ -394,7 +399,7 @@ sub annotate_maf {
         @var_data{qw(MOI_Type Oncogenicity Effect)} = ($moi_type, $oncogenicity,
             $effect);
 
-        if (DEBUG) {
+        if ($DEBUG) {
             print "MOI category: $moi_type\n";
             dd @var_data{qw(Hugo_Symbol MOI_Type Oncogenicity Effect)};
             print "-"x75;
@@ -493,6 +498,11 @@ sub run_nonhs_rules {
 
     my $moi_type = '.';
     my $exon = (split(/\//, $location))[0];
+    # if data coming from annovar, will not have the "exon#/total_exons" string.
+    # instead will be more explicit (i.e. exon11). Need to strip the "exon"
+    # string off to make it compatible.
+    $exon =~ s/exon//; 
+
     my ($aa_start, $aa_end) = $hgvs_p =~ /^p\.[\*A-Z]+(\d+)(?:_[A-Z]+(\d+))?.*/;
     $aa_end //= $aa_start; # only get end if there is a range from indel.
 
@@ -556,7 +566,7 @@ sub run_nonhs_rules {
     # Kit Exons, 9, 11, 13, 14, or 17 mutations.
     elsif ($gene eq 'KIT') {
         if ((grep { $exon eq $_  } ('9', '11', '13', '14', '17'))
-            && $function =~ /inframe.*/ || $function eq 'missense_variant') {
+            && $function =~ /in_frame/i || $function eq 'missense_variant') {
             $moi_count->{'KIT Exons 9, 11, 13, 14, or 17 Mutations'}++;
             return ('KIT Mutation in Exons 9, 11, 13, 14, or 17',
                 'Likely Oncogenic', 'Likely Gain-of-function');
