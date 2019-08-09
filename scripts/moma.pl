@@ -25,7 +25,7 @@ use constant FALSE => 0;
 
 my $DEBUG = 0;
 
-my $version = "v0.32.080919";
+my $version = "v0.33.080919";
 my $scriptdir = dirname($0);
 
 # Default lookup files.
@@ -342,7 +342,7 @@ sub annotate_maf {
 
         # DEBUG
         #
-        next unless $var_data{'Hugo_Symbol'} eq 'KIT';
+        # next unless $var_data{'Hugo_Symbol'} eq 'KIT';
         $logger->debug("\n" . "-"x75 . "\n");
 
         # Filter out SNPs, Intronic Variants, etc.
@@ -564,14 +564,29 @@ sub run_nonhs_rules {
                 'Likely Gain-of-function');
     }
     # Kit Exons, 9, 11, 13, 14, or 17 mutations.
-    elsif ($gene eq 'KIT') {
-        if ((grep { $exon eq $_  } ('9', '11', '13', '14', '17'))
-            && $function =~ /in_frame/i || $function eq 'missense_variant') {
+    elsif ($gene eq 'KIT' and grep { $exon eq $_ } ('9', '11', '13', '14', '17')) {
+        if ($function =~ /in_frame/i) {
             $moi_count->{'KIT Exons 9, 11, 13, 14, or 17 Mutations'}++;
-            return ('KIT Mutation in Exons 9, 11, 13, 14, or 17',
-                'Likely Oncogenic', 'Likely Gain-of-function');
+            return ('KIT Mutation in Exons 9, 11, 13, 14, or 17', 'Oncogenic',
+                'Gain-of-function');
+        }
+        elsif ($function eq 'missense_variant') {
+            $moi_count->{'KIT Exons 9, 11, 13, 14, or 17 Mutations'}++;
+            return ("KIT Mutation in Exons 9, 11, 13, 14, or 17", 
+                "Likely Oncogenic", "Gain-of-function");
         }
     }
+    # Kit Exons, 9, 11, 13, 14, or 17 mutations.
+    # elsif ($gene eq 'KIT') {
+        # if ((grep { $exon eq $_  } ('9', '11', '13', '14', '17'))
+            # && $function =~ /in_frame/i || $function eq 'missense_variant') {
+            # $moi_count->{'KIT Exons 9, 11, 13, 14, or 17 Mutations'}++;
+
+            
+            # return ('KIT Mutation in Exons 9, 11, 13, 14, or 17',
+                # 'Likely Oncogenic', 'Likely Gain-of-function');
+        # }
+    # }
     # TP53 DBD mutations (AA 102-292).
     elsif ($gene eq 'TP53' and ($aa_start > 102 and $aa_end < 292)) {
         $moi_count->{'TP53 DBD Mutations'}++;
