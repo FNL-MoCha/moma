@@ -22,7 +22,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils # noqa
 
-version = '1.8.20190725-dev3'
+version = '0.9.20190814-dev'
 
 # Globals
 output_root = os.getcwd()
@@ -36,7 +36,7 @@ oncokb_fusion_lookup = os.path.join(resources, 'moma_fusion_genes.tsv')
 blacklist_file = os.path.join(resources, 'blacklisted_vars.txt')
 outdir_path = os.path.abspath(output_root)
 
-#debug = False
+debug = False
 
 logfile = 'moma_reporter_{}.log'.format(utils.today())
 logger = logger.Logger(loglevel='debug', colored_output=True, dest=logfile)
@@ -53,7 +53,7 @@ def get_args():
     parser.add_argument(
         '--source',
         required=True,
-        choices=['oca', 'wes', 'tso500'],
+        choices=['oca', 'wes', 'tso500', 'genmaf'],
         help='Type of data being loaded. Will determine what steps and script '
             'are necessary to process these data.'
     )
@@ -275,11 +275,13 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
         for line in annovar_fh:
             data = dict(zip(header, line.rstrip('\n').split('\t')))
             varid = ':'.join(itemgetter(*['Chr', 'Start', 'Ref', 'Alt'])(data))
+            # XXX
+            vaf_data = data['vcf_info'] if source == 'oca' else data['vcf_sample']
             if varid in final_data:
                 new = {
                     'sift'       : __translate(data['SIFT_pred']),
                     'polyphen'   : __translate(data['Polyphen2_HDIV_pred']),
-                    'vaf'        : __get_vaf(data['vcf_info']),
+                    'vaf'        : __get_vaf(vaf_data, source),
                     'CLNREVSTAT' : data['CLNREVSTAT'],
                     'CLNSIG'     : data['CLNSIG'],
                     'cosid'      : __get_cosmic_id(data['cosmic89_noEnst'])
@@ -312,8 +314,16 @@ def __translate(string):
     }
     return sp_conversion.get(string, '???')
 
-def __get_vaf(vafstr):
-    return vafstr.split(';')[0].split('=')[1]
+def __get_vaf(vafstr, source):
+    # TODO: Figure out how to get the rounding correct here.
+    if source == 'oca':
+        return vafstr.split(';')[0].split('=')[1]
+    elif source == 'wes': 
+        return '{:.2f}'.format(float(vafstr.split(':')[2]) * 100)
+        #return str(round((float(vafstr.split(':')[2]) * 100), 2))
+    elif source == 'tso500':
+        return '{:.4f}'.format(float(vafstr.split(':')[4]) * 100)
+        #return str(round((float(vafstr.split(':')[4]) * 100), 4))
 
 def oncokb_annotate(annovar_file, source):
     """
@@ -557,12 +567,10 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     # Annotate the vcf with ANNOVAR.
     logger.write_log('info', 'Annotating the simplified VCF file with Annovar.')
     annovar_file = run_annovar(simple_vcf, sample_name)
-    # XXX
-    utils.__exit__()
-    #  """
 
+    #  """
     # TODO: Remove this.
-    #  sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}\u001b[0m\n\n'.format(decor='='*25))
+    sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}\u001b[0m\n\n'.format(decor='='*25))
     #  annovar_file = vcf
 
     # Implement the MOMA here.
@@ -604,7 +612,7 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
         logger.write_log('info', "Done with Fusions report.")
 
     # TODO: Remove this.
-    #  sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
+    sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
     #  sys.exit()
 
     # Combine the three reports into one master report.
@@ -615,7 +623,8 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
     if not keep_intermediate_files:
         for f in contents:
-            if any(f.endswith(x) for x in ('truncmaf', 'avinput')):
+            if any(f.endswith(x) for x in ('truncmaf', 'avinput', 'oncokb.tsv', 
+                'simple.vcf')):
                     logger.write_log('debug', f'Removing {f}.')
                     os.remove(f)
 
@@ -624,20 +633,6 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
 
     logger.write_log('info', 'MoCha OncoKB Annotator Pipline completed '
          'successfully! Data can be found in %s.' % outdir_path)
-
-
-
-#  def __gather_data():
-    #  '''
-    #  Make sure that output data from each portion of the pipeline makes it to the
-    #  output dir.
-    #  '''
-    #  file_manifest = ()
-    #  for f in file_manifest:
-        #  if os.path.exists(f):
-            #  shutil.move(os.path.abspath(f), os.path.join(outdir_path, f))
-
-
 
 if __name__ == '__main__':
     args = get_args()
