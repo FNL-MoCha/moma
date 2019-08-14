@@ -34,6 +34,7 @@ resources = os.path.join(package_root, 'resource')
 oncokb_cnv_file = os.path.join(resources, 'moma_cnv_lookup.tsv')
 oncokb_fusion_lookup = os.path.join(resources, 'moma_fusion_genes.tsv')
 blacklist_file = os.path.join(resources, 'blacklisted_vars.txt')
+outdir_path = os.path.abspath(output_root)
 
 #debug = False
 
@@ -159,22 +160,25 @@ def simplify_vcf(vcf, outdir):
             num_vars = len([line for line in fh if line.startswith('chr')])
         return num_vars, new_name
 
-def run_annovar(simple_vcf):
+def run_annovar(simple_vcf, sample_name):
     """
     Run Annovar on the simplified VCF to generate an annotate dataset that can
     then be filtered by gene. Return the resultant Annovar .txt file for 
     downstream processing.
     """
-    cmd = [os.path.join(scripts_dir, 'annovar_wrapper.sh'), simple_vcf]
+    file_path = f'{outdir_path}/{sample_name}'
+    cmd = [os.path.join(scripts_dir, 'annovar_wrapper.sh'), simple_vcf,
+            file_path]
     status = run(cmd, 'annotate VCF with Annovar')
+
     if status:
         sys.exit(1)
     else:
         # Rename the files to be shorter and cleaner
-        annovar_txt_out = os.path.abspath('%s.hg19_multianno.txt' % simple_vcf)
-        annovar_vcf_out = os.path.abspath('%s.hg19_multianno.vcf' % simple_vcf)
+        annovar_txt_out = os.path.abspath('%s.hg19_multianno.txt' % file_path)
+        annovar_vcf_out = os.path.abspath('%s.hg19_multianno.vcf' % file_path)
         for f in (annovar_vcf_out, annovar_txt_out):
-            new_name = f.replace('vcf.hg19_multianno', 'annovar')
+            new_name = f.replace('hg19_multianno', 'annovar')
             os.rename(f, new_name)
         return new_name
 
@@ -526,7 +530,7 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
         sample_name = get_name_from_vcf(vcf)
     logger.write_log('info', f'Processing sample: {sample_name}')
         
-    outdir_path = os.path.abspath(output_root)
+    global outdir_path
     if outdir is None:
         outdir_path = os.path.join(outdir_path, '%s_out' % sample_name)
     else:
@@ -552,7 +556,9 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
 
     # Annotate the vcf with ANNOVAR.
     logger.write_log('info', 'Annotating the simplified VCF file with Annovar.')
-    annovar_file = run_annovar(simple_vcf)
+    annovar_file = run_annovar(simple_vcf, sample_name)
+    # XXX
+    utils.__exit__()
     #  """
 
     # TODO: Remove this.
@@ -612,11 +618,26 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
             if any(f.endswith(x) for x in ('truncmaf', 'avinput')):
                     logger.write_log('debug', f'Removing {f}.')
                     os.remove(f)
+
     # Move our logfile into the output dir now that we're done.
     shutil.move(os.path.abspath(logfile), os.path.join(outdir_path, logfile))
 
     logger.write_log('info', 'MoCha OncoKB Annotator Pipline completed '
          'successfully! Data can be found in %s.' % outdir_path)
+
+
+
+#  def __gather_data():
+    #  '''
+    #  Make sure that output data from each portion of the pipeline makes it to the
+    #  output dir.
+    #  '''
+    #  file_manifest = ()
+    #  for f in file_manifest:
+        #  if os.path.exists(f):
+            #  shutil.move(os.path.abspath(f), os.path.join(outdir_path, f))
+
+
 
 if __name__ == '__main__':
     args = get_args()
