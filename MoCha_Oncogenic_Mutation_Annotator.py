@@ -5,9 +5,9 @@ import subprocess
 
 from ion.plugin import *
 
-class MoCha_OncoKB_MOI_Annotator(IonPlugin):
+class MoCha_Oncogenic_Mutation_Annotator(IonPlugin):
     """
-    Plugin to generate an MOI report from Oncomine data using Annovar and the
+    Plugin to generate an MOI report from NGS data using Annovar and the
     OncoKB databases.
     """
     with open(os.path.join(os.environ['DIRNAME'], '_version.py')) as fh:
