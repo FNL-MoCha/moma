@@ -342,7 +342,7 @@ sub annotate_maf {
 
         # DEBUG
         #
-        # next unless $var_data{'Hugo_Symbol'} eq 'KIT';
+        # next unless $var_data{'Hugo_Symbol'} eq 'PMS2';
         $logger->debug("\n" . "-"x75 . "\n");
 
         # Filter out SNPs, Intronic Variants, etc.
@@ -516,7 +516,7 @@ sub run_nonhs_rules {
              "\n\tfunction: $function\n";
         print "Warning message: $msg\n";
     };
-    
+
     # Deleterious / Truncating in TSG
     my @trunc_terms = qw(stop frameshift splice frame_shift nonsense);
     if (grep $gene eq $_, @$tsgs and grep $function =~ /$_/i, @trunc_terms) {
@@ -538,7 +538,7 @@ sub run_nonhs_rules {
             }
         } else {
             $moi_count->{'Deleterious in TSG'}++;
-            return ('Deleterious in TSG', 'Likely Onogenic', 
+            return ('Deleterious in TSG', 'Likely Oncogenic', 
                 'Likely Loss-of-function');
         }
     }
