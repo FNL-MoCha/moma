@@ -341,8 +341,7 @@ sub annotate_maf {
         @var_data{@$header} = @$elems;
 
         # DEBUG
-        #
-        # next unless $var_data{'Hugo_Symbol'} eq 'PMS2';
+        # next unless $var_data{'Hugo_Symbol'} eq 'FLT3';
         $logger->debug("\n" . "-"x75 . "\n");
 
         # Filter out SNPs, Intronic Variants, etc.
@@ -483,7 +482,6 @@ sub read_tsgs {
     $logger->info("$info TSG lookup version: $tsg_version");
 
     readline($fh); # Throw out header.
-    # return [map{ chomp; $_} <$fh>];
     return [map{ $_ =~ /Yes$/ ? ((split(/,/, $_))[3]) : () } <$fh>];
 }
 
@@ -503,7 +501,12 @@ sub run_nonhs_rules {
     # string off to make it compatible.
     $exon =~ s/exon//; 
 
-    my ($aa_start, $aa_end) = $hgvs_p =~ /^p\.[\*A-Z]+(\d+)(?:_[A-Z]+(\d+))?.*/;
+    my ($aa_start, $aa_end);
+    if ($function =~ /splice/i) {
+        $aa_start = $aa_end = -1 
+    } else {
+        ($aa_start, $aa_end) = $hgvs_p =~ /^p\.[\*A-Z]+(\d+)(?:_[A-Z]+(\d+))?.*/;
+    }
     $aa_end //= $aa_start; # only get end if there is a range from indel.
 
     # DEBUG
@@ -576,17 +579,6 @@ sub run_nonhs_rules {
                 "Likely Oncogenic", "Gain-of-function");
         }
     }
-    # Kit Exons, 9, 11, 13, 14, or 17 mutations.
-    # elsif ($gene eq 'KIT') {
-        # if ((grep { $exon eq $_  } ('9', '11', '13', '14', '17'))
-            # && $function =~ /in_frame/i || $function eq 'missense_variant') {
-            # $moi_count->{'KIT Exons 9, 11, 13, 14, or 17 Mutations'}++;
-
-            
-            # return ('KIT Mutation in Exons 9, 11, 13, 14, or 17',
-                # 'Likely Oncogenic', 'Likely Gain-of-function');
-        # }
-    # }
     # TP53 DBD mutations (AA 102-292).
     elsif ($gene eq 'TP53' and ($aa_start > 102 and $aa_end < 292)) {
         $moi_count->{'TP53 DBD Mutations'}++;
