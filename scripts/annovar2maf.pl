@@ -269,12 +269,12 @@ sub map_transcript {
         local $SIG{__WARN__}  = sub {
             my $msg = shift;
             print "$warn Issue mapping transcript for the following entry:\n";
-            print "Gene: $gene; type: $type; candidate: $candidate\n";
+            print "\tGene: $gene; type: $type; candidate: $candidate\n";
             dd \@elems;
             print $msg;
+            # print "Skipping this entry.\n";
             # print "Skipping for now....this is a temporary fix!\n";
-            # next;
-            exit 1;
+            # exit 1;
         };
         
         if ($type eq 'noncoding' || $type eq 'splicesite') {
@@ -323,11 +323,12 @@ sub map_consequence {
     my %map = (
          'frameshift deletion'               => 'Frame_Shift_Del',
          'frameshift insertion'              => 'Frame_Shift_Ins',
-         'framshift block substitution'      => "???",
+         'frameshift block substitution'     => 'Frame_Shift_Sub', # Doesn't exist, but should
+         'frameshift substitution'           => 'Frame_Shift_Sub', # Doesn't exist, but should
          'nonframeshift deletion'            => 'In_Frame_Del',
          'nonframeshift insertion'           => 'In_Frame_Ins',
          'nonframeshift substitution'        => 'Missense_Mutation', # Don't have MNV category.
-         'nonframeshift block substitution'  => '???',
+         'nonframeshift block substitution'  => 'In_Frame_Sub', # Doesn't exist, but should.
          'nonsynonymous SNV'                 => 'Missense_Mutation',
          'stopgain'                          => 'Nonsense_Mutation',
          'stoploss'                          => 'Nonstop_Mutation',
