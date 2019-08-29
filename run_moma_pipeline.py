@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Pipeline wrapper script for the MoCha Oncomine Clinical Annotation Tool (MOMA)
-plugin. 
+MoCha Oncogenic Mutation Annotator Tool (MOMA)
+This utility will take a VCF file from MoCha pipelines including the Oncomine
+Cancer Assay (OCA), TSO500 ctDNA assay, and our current whole exome sequencing
+(WES) assay, and generate a report that contains all coding variants that are
+non-synonymous and not likely SNPs and adds OncoKB annotations to determine
+which of them are oncogenic and not.  In addition to the SNVs and Indels, we can
+also add copy number variation (CNV) and fusion data to the output in one master
+report. 
 """
 
 import os
@@ -22,7 +28,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils # noqa
 
-version = '0.9.20190814-dev'
+version = '0.11.20190829-dev'
 
 # Globals
 output_root = os.getcwd()
@@ -35,7 +41,6 @@ oncokb_cnv_file = os.path.join(resources, 'moma_cnv_lookup.tsv')
 oncokb_fusion_lookup = os.path.join(resources, 'moma_fusion_genes.tsv')
 blacklist_file = os.path.join(resources, 'blacklisted_vars.txt')
 outdir_path = os.path.abspath(output_root)
-
 debug = False
 
 logfile = 'moma_reporter_{}.log'.format(utils.today())
@@ -187,11 +192,6 @@ def generate_report(annovar_data, genes, outfile):
     Process the OncoKB annotated Annovar data to filter out data by gene, 
     population frequency, and any other filter.
     """
-
-    # XXX
-    #  pp(annovar_data)
-    #  utils.__exit__()
-
     with open(outfile, 'w') as outfh:
         csv_writer = csv.writer(outfh, lineterminator="\n", delimiter=",")
         wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
@@ -252,6 +252,7 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
     final_data = defaultdict(dict)
     blacklist_vars = __load_blacklist()
 
+    # Load the OncoKB Annotated data first...
     with open(annotated_maf) as amaf_fh:
         header = amaf_fh.readline().rstrip('\n').split('\t')
         for line in amaf_fh:
@@ -265,8 +266,7 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
                 continue
             final_data[varid] = dict(zip(header, data))
 
-    # TODO: Use 'source' info to correctly calculate the VAF for each.
-    # Different for OCA compared to TSO500 or WES
+    # ...now load the Annovar stem data and join with the above.
     with open(annovar_file) as annovar_fh:
         header = annovar_fh.readline().rstrip('\n').split('\t')
         header.extend(['Otherinfo1', 'Otherinfo2', 'vcf_chr', 'vcf_pos',
@@ -275,13 +275,29 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
         for line in annovar_fh:
             data = dict(zip(header, line.rstrip('\n').split('\t')))
             varid = ':'.join(itemgetter(*['Chr', 'Start', 'Ref', 'Alt'])(data))
-            # XXX
-            vaf_data = data['vcf_info'] if source == 'oca' else data['vcf_sample']
+
             if varid in final_data:
+                # Work on the VAF data.
+                vaf_data = data['vcf_info'] if source == 'oca' else data['vcf_sample']
+                if vaf_data.startswith('./.'):
+                    logger.write_log('warn', 'Removing entry for {} because it '
+                        'is a NOCALL that should be filtered out.'.format(varid))
+                    del final_data[varid]
+                    continue
+                elif vaf_data.count(',') > 1:
+                    logger.write_log('warn', 'Multiple entries in line for {}. '
+                        'Need to split apart.'.format(varid))
+                    del final_data[varid]
+                    continue
+                try:
+                    vaf = __get_vaf(varid, vaf_data, source)
+                except:
+                    utils.__exit__(msg='Issue getting VAF for {}; vaf_str: '
+                        '{}'.format(varid, vaf_data), color='red')
                 new = {
                     'sift'       : __translate(data['SIFT_pred']),
                     'polyphen'   : __translate(data['Polyphen2_HDIV_pred']),
-                    'vaf'        : __get_vaf(vaf_data, source),
+                    'vaf'        : vaf,
                     'CLNREVSTAT' : data['CLNREVSTAT'],
                     'CLNSIG'     : data['CLNSIG'],
                     'cosid'      : __get_cosmic_id(data['cosmic89_noEnst'])
@@ -296,11 +312,8 @@ def __get_cosmic_id(cosmic_data):
     Get the COSMIC ID for the variant if one in Annovar. The issue is that there
     can be more than one per variant, and we have to try to map it adequately.
     """
-    #  cosids, rest = cosmic_data.split(';')
-    #  print(f'ids: {cosids} <> occurances: {rest}')
     if cosmic_data == '.':
         return '.'
-    #  pp(cosmic_data.split(';'))
     cosid, occurance = cosmic_data.split(';')
     return cosid.strip('ID=')
 
@@ -314,16 +327,14 @@ def __translate(string):
     }
     return sp_conversion.get(string, '???')
 
-def __get_vaf(vafstr, source):
-    # TODO: Figure out how to get the rounding correct here.
+def __get_vaf(varid, vafstr, source):
+    #print(f'vaf string to proc: {vafstr}')
     if source == 'oca':
         return vafstr.split(';')[0].split('=')[1]
     elif source == 'wes': 
-        return '{:.2f}'.format(float(vafstr.split(':')[2]) * 100)
-        #return str(round((float(vafstr.split(':')[2]) * 100), 2))
+        return '{:.2f}'.format(float(vafstr.split(':')[2]) * 100.00)
     elif source == 'tso500':
-        return '{:.4f}'.format(float(vafstr.split(':')[4]) * 100)
-        #return str(round((float(vafstr.split(':')[4]) * 100), 4))
+        return '{:.4f}'.format(float(vafstr.split(':')[4]) * 100.00)
 
 def oncokb_annotate(annovar_file, source):
     """
@@ -531,8 +542,9 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     pipeline_version = ''
     with open(os.path.join(package_root, '_version.py')) as fh:
         pipeline_version = fh.readline().rstrip("'\n'").split("'")[1]
-    welcome_str = ('{0}\n:::::  Running the MoCha OncoKB Annotation (MOMA) '
-         'pipeline - Version {1}  :::::\n{0}\n'.format('='*88, pipeline_version))
+    welcome_str = ('{0}\n:::::  Running the MoCha Oncogenic Mutation Annotator '
+        '(MOMA) pipeline - Version {1}  :::::\n{0}\n'.format('='*93, 
+            pipeline_version))
     logger.write_log('header', welcome_str)
 
     # Create an output directory based on the sample_name
@@ -569,8 +581,9 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     annovar_file = run_annovar(simple_vcf, sample_name)
 
     #  """
-    # TODO: Remove this.
     sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}\u001b[0m\n\n'.format(decor='='*25))
+
+    # TODO: Remove this.
     #  annovar_file = vcf
 
     # Implement the MOMA here.
