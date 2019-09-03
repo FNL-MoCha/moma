@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # Light (very!) version of vcfExtractor just for the AMG-232 plugin. This will 
 # parse out the NOCALLs and reference calls from the VCF, and explode the 
 # multiple calls per line into 1 call per line.
