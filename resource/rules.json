@@ -1,0 +1,251 @@
+{
+    "metadata" : {
+        "version" : "0.1.091219",
+        "oncokb_version" : "1.20"
+    },
+    "rules" : {
+        "NOTCH1" : [
+            {
+                "exon" : [],
+                "aa_start" : "",
+                "aa_end" : "<=2250",
+                "function" : [
+                    "stop",
+                    "frameshift",
+                    "splice",
+                    "frame_shift",
+                    "nonsense"
+                ],
+                "category" : "NOTCH1 Truncating Mutations",
+                "oncogenicity" : "Oncogenic",
+                "effect" : "Likely Loss-of-function"
+            }
+        ],
+        "NOTCH2" : [
+            {
+                "exon" : [],
+                "aa_start" : "",
+                "aa_end" : "<=2009",
+                "function" : [
+                    "stop",
+                    "frameshift",
+                    "splice",
+                    "frame_shift",
+                    "nonsense"
+                ],
+                "category" : "NOTCH2 Truncating Loss of Function Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Loss-of-function"
+            },
+            {
+                "exon" : [],
+                "aa_start" : ">2009",
+                "aa_end" : "<=2471",
+                "function" : [
+                    "stop",
+                    "frameshift",
+                    "splice",
+                    "frame_shift",
+                    "nonsense"
+                ],
+                "category" : "NOTCH2 Truncating Gain of Function Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "EGFR" : [
+            {
+                "exon" : [19],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : ["inframe_deletion"],
+                "category" : "EGFR In-frame Deletion in Exon 19",
+                "oncogenicity" : "Oncogenic",
+                "effect" : "Gain-of-function"
+            },
+            {
+                "exon" : [20],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : ["inframe_insertion"],
+                "category" : "EGFR In-frame Insertion in Exon 20",
+                "oncogenicity" : "Oncogenic",
+                "effect" : "Gain-of-function"
+            }
+        ],
+        "ERBB2" : [
+            {
+                "exon" : [20],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : ["inframe_insertion"],
+                "category" : "ERBB2 In-frame Insertion in Exon 20",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "KIT" : [
+            {
+                "exon" : [9, 11, 13, 14, 17],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : ["inframe", "missense_variant"],
+                "category" : "KIT Mutations in Exons 9, 11, 13, 14, or 17",
+                "oncogenicity" : "likely oncogenic",
+                "effect" : "gain-of-function"
+            }
+        ],
+        "TP53" : [
+            {
+                "exon" : [],
+                "aa_start" : ">102",
+                "aa_end" : "<292",
+                "function" : [],
+                "category" : "TP53 DBD Mutations",
+                "oncogenicity" : "Oncogenic",
+                "effect" : "Loss-of-function"
+            }
+        ],
+        "CCND1" : [
+            {
+                "exon" : [],
+                "aa_start" : ">=256",
+                "aa_end" : "<=286",
+                "function" : [],
+                "category" : "CCND1 Truncating Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "CCND3" : [
+            {
+                "exon" : [],
+                "aa_start" : ">=286",
+                "aa_end" : "<=292",
+                "function" : [],
+                "category" : "CCND3 Truncating Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "CXCR4" : [
+            {
+                "exon" : [],
+                "aa_start" : ">=332",
+                "aa_end" : "<=352",
+                "function" : [],
+                "category" : "CXCR4 Truncating Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "PPM1D" : [
+            {
+                "exon" : [],
+                "aa_start" : ">=422",
+                "aa_end" : "<=605",
+                "function" : [],
+                "category" : "PPM1D Truncating Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "PIK3CA" : [
+            {
+                "exon" : [20],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : [],
+                "category" : "PIK3CA Exon 20 Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "MED12" : [
+            {
+                "exon" : [1, 2],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : [],
+                "category" : "MED12 Exon 1 or 2 Mutations",
+                "oncogenicity" : "Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "CALR" : [
+            {
+                "exon" : [9],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : ["frameshift", "stop"],
+                "category" : "CALR C-terminal Truncating Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Loss-of-function"
+            },
+            {
+                "exon" : [9],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : ["insertion", "deletion"],
+                "category" : "CALR Exon 9 Indels",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "JAK2" : [
+            {
+                "exon" : [12],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : [],
+                "category" : "JAK2 Exon 12 Alterations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Gain-of-function"
+            }
+        ],
+        "MPL" : [
+            {
+                "exon" : [10],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : [],
+                "category" : "MPL Exon 10 Alterations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "FLT3" : [
+            {
+                "exon" : [],
+                "aa_start" : ">=604",
+                "aa_end" : "<=958",
+                "function" : [],
+                "category" : "FLT3 TyrK Domain Mutations",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
+            }
+        ],
+        "TERT" : [
+            {
+                "exon" : [],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : ["upstream"],
+                "category" : "TERT Promoter Mutations",
+                "oncogenicity" : "Oncogenic",
+                "effect" : "Gain-of-function"
+            }
+        ],
+        "MET" : [
+            {
+                "exon" : [13, 14, 15],
+                "aa_start" : "",
+                "aa_end" : "",
+                "function" : ["splice"],
+                "category" : "MET Exon 14 Splice Variants",
+                "oncogenicity" : "Oncogenic",
+                "effect" : "Gain-of-function"
+            }
+        ]
+    }
+}
