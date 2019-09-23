@@ -11,9 +11,8 @@ use warnings;
 use Carp;
 
 use JSON;
-use Data::Dump;  # TODO: Go away!
 
-our $VERSION='0.3.091219';
+our $VERSION='0.4.092319';
 
 sub new {
     my $class = shift;
@@ -43,21 +42,53 @@ sub __load_rules {
 }
 
 sub check_variant {
-    # TODO: Do we want to use this as the main method entry point, which will
-    # then branch out to check by aa, check by exon, and check by raw function?
+    # Main entry point for checking non-hotspot rules. Determine if there is a
+    # rule for the incoming gene, and if so, determine whether it's an exon
+    # location rule or an amino acid rule; it can only either be an exon or
+    # amino acid rule, but not none or both.  If either one of those is a match,
+    # return the matching rule, and then make sure the function matches.  If so,
+    # report the category, oncogenicity, and effect of the variant.
     my ($self, $gene, $aa_start, $aa_end, $function, $exon) = @_;
+    
     my ($category, $oncogenicity, $effect) = ('', '', '');
+    my $selected_rule;
 
     if (exists $self->{'rules'}{$gene}) {
-        # Run codon test.
-        my $selected_rule = $self->codon_in_range($aa_start, $aa_end, 
-            $self->{'rules'}{$gene});
-        dd $selected_rule;
-        exit;
-        ## Run function test.
-        # $self->check_function();
-        ## Run exon test.
-        # $self->check_exon();
+        my $gene_rules = $self->{'rules'}{$gene};
+        # Check to see if we need to evaluate the amino acid position or the
+        # exon position.
+        for (@$gene_rules) {
+            # Run codon test.
+            if ($_->{'aa_start'} or $_->{'aa_end'}) {
+                $selected_rule = $self->codon_in_range($aa_start, $aa_end, 
+                    $gene_rules);
+            }
+            # Run exon test.
+            elsif ($_->{'exon'}) {
+                # $selected_rule = $self->check_exon($exon, $gene_rules);
+                $selected_rule = $_ if $self->check_exon($exon, $_);
+            }
+            last if $selected_rule;
+        }
+
+        # If got a rule, then move to check the functional annotation, otherwise
+        # just return the null strings.
+        $selected_rule or return $category, $oncogenicity, $effect;
+
+        # Now that there is a selected rule, if there are functional annotation
+        # rules, check them, otherwise, return the category, oncogenicity,
+        # effect as is; we don't care about the function, only the location.
+        if ($selected_rule && @{$selected_rule->{'function'}}) {
+            my $retval = $self->check_function($function, 
+                $selected_rule->{'function'});
+            return $category, $oncogenicity, $effect unless $retval;
+        } 
+
+        # If we made it here, then the rule passes. Capture the oncogenicity
+        # info for the return.
+        $category = $selected_rule->{'category'};
+        $oncogenicity = $selected_rule->{'oncogenicity'};
+        $effect = $selected_rule->{'effect'};
     }
     return $category, $oncogenicity, $effect;
 }
@@ -144,11 +175,16 @@ sub check_function {
     # Check to see if the functional annotation matches rule.
     my ($self, $function, $rule_func) = @_;
     (grep $function =~ /$_/, @$rule_func) ? return 1 : return 0;
-    # print "function: $function\n";
-    ## Check to see if function in the list as the last check.
-    # if (grep $function =~ /$_/, @{$rule->{'function'}}) {
-        # return ($rule->{'category'}, $rule->{'oncogenicity'},
-            # $rule->{'effect'});
+}
+
+sub check_exon {
+    # Check to see if the exon matches the rule.
+    my ($self, $exon, $rule_exons) = @_;
+    # Technically should be using numeric comparison op, but since we have TERT
+    # promoter mutations and will get the '---' string in place of exon
+    # location, use the string compare op instead. Should still work fine for
+    # numbers since 1:1 comprison.
+    (grep $exon eq $_, @{$rule_exons->{'exon'}}) ? return 1 : return 0;
 }
 
 sub __comp {

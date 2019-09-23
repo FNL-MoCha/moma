@@ -1,6 +1,6 @@
 {
     "metadata" : {
-        "version" : "0.1.091219",
+        "version" : "1.0.092319",
         "oncokb_version" : "1.20"
     },
     "rules" : {
@@ -16,9 +16,24 @@
                     "frame_shift",
                     "nonsense"
                 ],
-                "category" : "NOTCH1 Truncating Mutations",
+                "category" : "NOTCH1 Truncating Mutations Upstream TA Domain",
                 "oncogenicity" : "Oncogenic",
                 "effect" : "Likely Loss-of-function"
+            },
+            {
+                "exon" : [],
+                "aa_start" : ">=2375",
+                "aa_end" : "<2555",
+                "function" : [
+                    "stop",
+                    "frameshift",
+                    "splice",
+                    "frame_shift",
+                    "nonsense"
+                ],
+                "category" : "NOTCH1 Truncating Mutations in the PEST Domain",
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Gain-of-function"
             }
         ],
         "NOTCH2" : [
@@ -58,7 +73,7 @@
                 "exon" : [19],
                 "aa_start" : "",
                 "aa_end" : "",
-                "function" : ["inframe_deletion"],
+                "function" : ["inframe_deletion", "inframe_insertion"],
                 "category" : "EGFR In-frame Deletion in Exon 19",
                 "oncogenicity" : "Oncogenic",
                 "effect" : "Gain-of-function"
@@ -78,7 +93,7 @@
                 "exon" : [20],
                 "aa_start" : "",
                 "aa_end" : "",
-                "function" : ["inframe_insertion"],
+                "function" : ["inframe_insertion", "inframe_deletion"],
                 "category" : "ERBB2 In-frame Insertion in Exon 20",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
@@ -89,7 +104,7 @@
                 "exon" : [9, 11, 13, 14, 17],
                 "aa_start" : "",
                 "aa_end" : "",
-                "function" : ["inframe", "missense_variant"],
+                "function" : ["inframe", "missense"],
                 "category" : "KIT Mutations in Exons 9, 11, 13, 14, or 17",
                 "oncogenicity" : "likely oncogenic",
                 "effect" : "gain-of-function"
@@ -102,8 +117,8 @@
                 "aa_end" : "<292",
                 "function" : [],
                 "category" : "TP53 DBD Mutations",
-                "oncogenicity" : "Oncogenic",
-                "effect" : "Loss-of-function"
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Likely Loss-of-function"
             }
         ],
         "CCND1" : [
@@ -111,10 +126,10 @@
                 "exon" : [],
                 "aa_start" : ">=256",
                 "aa_end" : "<=286",
-                "function" : [],
+                "function" : ["frameshift", "nonsense", "stop"],
                 "category" : "CCND1 Truncating Mutations",
                 "oncogenicity" : "Likely Oncogenic",
-                "effect" : "Likely Gain-of-function"
+                "effect" : "Gain-of-function"
             }
         ],
         "CCND3" : [
@@ -122,7 +137,7 @@
                 "exon" : [],
                 "aa_start" : ">=286",
                 "aa_end" : "<=292",
-                "function" : [],
+                "function" : ["frameshift", "nonsense", "stop"],
                 "category" : "CCND3 Truncating Mutations",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
@@ -133,7 +148,7 @@
                 "exon" : [],
                 "aa_start" : ">=332",
                 "aa_end" : "<=352",
-                "function" : [],
+                "function" : ["frameshift", "nonsense", "stop"],
                 "category" : "CXCR4 Truncating Mutations",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
@@ -144,19 +159,8 @@
                 "exon" : [],
                 "aa_start" : ">=422",
                 "aa_end" : "<=605",
-                "function" : [],
+                "function" : ["frameshift", "nonsense", "stop"],
                 "category" : "PPM1D Truncating Mutations",
-                "oncogenicity" : "Likely Oncogenic",
-                "effect" : "Likely Gain-of-function"
-            }
-        ],
-        "PIK3CA" : [
-            {
-                "exon" : [20],
-                "aa_start" : "",
-                "aa_end" : "",
-                "function" : [],
-                "category" : "PIK3CA Exon 20 Mutations",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
             }
@@ -174,20 +178,11 @@
         ],
         "CALR" : [
             {
-                "exon" : [9],
-                "aa_start" : "",
-                "aa_end" : "",
-                "function" : ["frameshift", "stop"],
+                "exon" : [],
+                "aa_start" : ">=309",
+                "aa_end" : "<=417",
+                "function" : ["frameshift", "nonsense", "stop"],
                 "category" : "CALR C-terminal Truncating Mutations",
-                "oncogenicity" : "Likely Oncogenic",
-                "effect" : "Likely Loss-of-function"
-            },
-            {
-                "exon" : [9],
-                "aa_start" : "",
-                "aa_end" : "",
-                "function" : ["insertion", "deletion"],
-                "category" : "CALR Exon 9 Indels",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
             }
@@ -227,7 +222,7 @@
         ],
         "TERT" : [
             {
-                "exon" : [],
+                "exon" : ["---"],
                 "aa_start" : "",
                 "aa_end" : "",
                 "function" : ["upstream"],
@@ -238,7 +233,7 @@
         ],
         "MET" : [
             {
-                "exon" : [13, 14, 15],
+                "exon" : [14],
                 "aa_start" : "",
                 "aa_end" : "",
                 "function" : ["splice"],
