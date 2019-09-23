@@ -19,8 +19,8 @@ import argparse
 import subprocess
 
 from pprint import pprint as pp # noqa
-from pprint import pformat
-from textwrap import indent
+from pprint import pformat # noqa
+from textwrap import indent # noqa
 from operator import itemgetter
 from collections import defaultdict
 from natsort import natsorted
@@ -28,7 +28,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils # noqa
 
-version = '0.11.20190829-dev'
+version = '0.12.20190911-dev'
 
 # Globals
 output_root = os.getcwd()
@@ -56,7 +56,7 @@ def get_args():
             'from the Ion Torrent TVC plugin.'
     )
     parser.add_argument(
-        '--source',
+        '-s', '--source',
         required=True,
         choices=['oca', 'wes', 'tso500', 'genmaf'],
         help='Type of data being loaded. Will determine what steps and script '
@@ -120,6 +120,14 @@ def get_args():
         action='store_true',
         help='Keep all intermediate files and do not delete. Useful for '
             'troubleshooting.'
+    )
+    parser.add_argument(
+        '-p', '--popfreq',
+        metavar='<pop_frequency>',
+        type=float,
+        default='0.01',
+        help='Population frequency threshold above which variants will be '
+            'filtered out.'
     )
     parser.add_argument(
         '-v', '--version', 
@@ -294,15 +302,27 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
                 except:
                     utils.__exit__(msg='Issue getting VAF for {}; vaf_str: '
                         '{}'.format(varid, vaf_data), color='red')
+
+                cov_info = data['vcf_sample'].split(':')[1]
+                if ',' not in cov_info: continue
+                try:
+                    ref_reads, alt_reads = cov_info.split(',')
+                except:
+                    pp(data['vcf_sample'])
+                    sys.exit(1)
+
                 new = {
                     'sift'       : __translate(data['SIFT_pred']),
                     'polyphen'   : __translate(data['Polyphen2_HDIV_pred']),
                     'vaf'        : vaf,
+                    'alt_reads'  : alt_reads,
+                    'ref_reads'  : ref_reads,
                     'CLNREVSTAT' : data['CLNREVSTAT'],
                     'CLNSIG'     : data['CLNSIG'],
                     'cosid'      : __get_cosmic_id(data['cosmic89_noEnst'])
                 }
                 final_data[varid].update(new)
+    # XXX
     #  pp(final_data)
     #  utils.__exit__()
     return dict(final_data)
@@ -336,7 +356,7 @@ def __get_vaf(varid, vafstr, source):
     elif source == 'tso500':
         return '{:.4f}'.format(float(vafstr.split(':')[4]) * 100.00)
 
-def oncokb_annotate(annovar_file, source):
+def oncokb_annotate(annovar_file, source, popfreq):
     """
     Create a temp file that our TSO500, OncoKB driven annotator can use and
     annotate using those rules.  Those annotations will be added to the dataset
@@ -356,7 +376,7 @@ def oncokb_annotate(annovar_file, source):
     oncokb_annot_cmd = (
         os.path.join(scripts_dir, 'moma.pl'), 
         '-a', 'oncokb',
-        '-p', 'exac:0.05', 
+        '-p', 'exac:%f' % popfreq, 
         '--no-trim', 
         '-V', 
         '-o', annotated_maf, 
@@ -532,18 +552,22 @@ def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
             var_data = __read_report(fusion_report)
             outfh.write('\n'.join(var_data))
 
+        # Need trailing newline or will have some problems later on if we are
+        # trying to combine, merge, etc. reports.
+        outfh.write('\n')
+
 def __read_report(report):
     with open(report) as fh:
         return [line.rstrip('\n') for line in fh]
 
-def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
-        reads, outdir, quiet, keep_intermediate_files):
+def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
+        get_fusions, reads, outdir, quiet, keep_intermediate_files):
 
     pipeline_version = ''
     with open(os.path.join(package_root, '_version.py')) as fh:
         pipeline_version = fh.readline().rstrip("'\n'").split("'")[1]
     welcome_str = ('{0}\n:::::  Running the MoCha Oncogenic Mutation Annotator '
-        '(MOMA) pipeline - Version {1}  :::::\n{0}\n'.format('='*93, 
+        '(MOMA) pipeline - v{1}  :::::\n{0}\n'.format('='*97, 
             pipeline_version))
     logger.write_log('header', welcome_str)
 
@@ -581,7 +605,7 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     annovar_file = run_annovar(simple_vcf, sample_name)
 
     #  """
-    sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}\u001b[0m\n\n'.format(decor='='*25))
+    #  sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}\u001b[0m\n\n'.format(decor='='*25))
 
     # TODO: Remove this.
     #  annovar_file = vcf
@@ -589,7 +613,7 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
     # Implement the MOMA here.
     logger.write_log('info', 'Running OncoKB Filter rules on data to look for '
             'oncogenic variants.')
-    oncokb_annotated_data = oncokb_annotate(annovar_file, data_source) 
+    oncokb_annotated_data = oncokb_annotate(annovar_file, data_source, popfreq) 
 
     # XXX
     #  pp(oncokb_annotated_data)
@@ -625,7 +649,7 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
         logger.write_log('info', "Done with Fusions report.")
 
     # TODO: Remove this.
-    sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
+    #  sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
     #  sys.exit()
 
     # Combine the three reports into one master report.
@@ -650,14 +674,15 @@ def main(vcf, data_source, sample_name, genes, get_cnvs, cu, cl, get_fusions,
 if __name__ == '__main__':
     args = get_args()
 
-    args_dict = pformat(vars(args))
-    logger.write_log('debug', "Args passed to the script:\n{}".format(
-        indent(args_dict, '    ')))
+    #  args_dict = pformat(vars(args))
+    #  logger.write_log('debug', "Args passed to the script:\n{}".format(
+        #  indent(args_dict, '    ')))
 
     if args.genes == 'all':
         genelist = []
     else:
         genelist = args.genes.split(',')
 
-    main(args.vcf, args.source, args.name, genelist, args.CNV, args.cu, args.cl, 
-            args.Fusion, args.reads, args.outdir, args.quiet, args.keep)
+    main(args.vcf, args.source, args.name, genelist, args.popfreq, args.CNV, 
+            args.cu, args.cl, args.Fusion, args.reads, args.outdir, args.quiet,
+            args.keep)
