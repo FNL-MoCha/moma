@@ -25,7 +25,7 @@ use constant FALSE => 0;
 
 my $DEBUG = 0;
 
-my $version = "v0.33.080919";
+my $version = "v0.34.091119";
 my $scriptdir = dirname($0);
 
 # Default lookup files.
@@ -186,6 +186,21 @@ my $intro_str = sprintf("\n%s\n\t\t    Starting MoCha OncoKB MOI Annotation " .
     "Script\n%s\n", "="x80, "="x80);
 $logger->info($intro_str);
 
+# Load up annotation data from either hotspots BED or oncokb file.
+my $annotation_data;
+if ($annot_method eq 'hs_bed') {
+    $logger->info("Using Hotspot BED file " . basename($hs_bed));
+    $annotation_data = read_hs_bed($hs_bed);
+} else {
+    $logger->info("Using OncoKB file " . basename($oncokb_file));
+    $annotation_data = read_oncokb_file($oncokb_file);
+}
+
+# Load up TSGs for the non-hs rules
+$logger->info("Using TSG file " . basename($tsg_file));
+my $tsgs = read_tsgs($tsg_file);
+
+# Set up population frequency filter.
 my $popfreq_category = 'gnomad';
 my $popfreq_threshold = 0.05;
 if ($wanted_popfreq) {
@@ -198,30 +213,15 @@ if ($wanted_popfreq) {
     }
 }
 
+$logger->info("Using a population frequency filter $popfreq_category -> " . 
+    # "$popfreq_threshold");
+    sprintf("%0.2f", $popfreq_threshold));
+
 ################------ END Arg Parsing and Script Setup ------#################
-
-# Load up annotation data from either hotspots BED or oncokb file.
-my $annotation_data;
-if ($annot_method eq 'hs_bed') {
-    $logger->info("Using Hotspot BED file " . basename($hs_bed));
-    $annotation_data = read_hs_bed($hs_bed);
-} else {
-    $logger->info("Using OncoKB file " . basename($oncokb_file));
-    $annotation_data = read_oncokb_file($oncokb_file);
-}
-
-# dd $annotation_data;
-# exit;
-
-# Load up TSGs for the non-hs rules
-$logger->info("Using TSG file " . basename($tsg_file));
-my $tsgs = read_tsgs($tsg_file);
-# dd \$tsgs;
-# exit;
 
 # Process each MAF file
 for my $maf_file (@ARGV) {
-    $logger->info( "Annotating '$maf_file'..." );
+    $logger->info( "Annotating '" . basename($maf_file) . "'..." );
     my $results;
     $results = annotate_maf($maf_file, $annotation_data, $tsgs);
 
@@ -257,7 +257,7 @@ sub print_results {
     my $filter_status;
     ($filter) ? ($filter_status = 'on') : ($filter_status = 'off');
     $logger->info( "Writing results to $filename (filter is $filter_status)");
-    print "Writing results to $filename (filter is $filter_status)\n";
+    #print "Writing results to $filename (filter is $filter_status)\n";
 
     open(my $outfh, ">", $filename);
 
@@ -412,15 +412,15 @@ sub annotate_maf {
         $results[0]->{$term} = $tot_header_elems++;
     }
         
-    $logger->info(sprintf("Variant Summary\nTotal variants:\t%3s\nFiltered " .
-        "out:\t%3s\nRetained:\t\t%3s", $var_count, $filter_count, 
+    $logger->info(sprintf("\n>>>  Variant Summary  <<<\nTotal variants:\t%3s\nFiltered " .
+        "out:\t%3s\nRetained:\t\t%3s\n", $var_count, $filter_count, 
         $var_count-$filter_count)
     );
     my $moi_count_string;
     for (sort keys %moi_count) {
         $moi_count_string .= sprintf("%-42s: %s\n", $_, $moi_count{$_});
     }
-    $logger->info("MOI Counts:\n$moi_count_string" );
+    $logger->info("\n>>>  MOI Counts  <<<\n$moi_count_string" );
 
     return \@results;
 }
@@ -479,7 +479,7 @@ sub read_tsgs {
     # Return a list of TSGs based on our OncoKB reference file.
     open(my $fh, "<", $tsg_file);
     my $tsg_version = (split(' ', readline($fh)))[1];
-    $logger->info("$info TSG lookup version: $tsg_version");
+    $logger->info("TSG lookup version: $tsg_version");
 
     readline($fh); # Throw out header.
     return [map{ $_ =~ /Yes$/ ? ((split(/,/, $_))[3]) : () } <$fh>];
@@ -662,11 +662,10 @@ sub run_nonhs_rules {
     # }
     
     # MET exon 14 splice variants.
-    # TODO: Add this rule.
-    # elsif ($gene eq 'MET') {
-        # $moi_count->{'MET exon14 splice variants'}++;
-        # return('MET exon14 splice variants', 'Oncogenic', 'Gain-of-function');
-    # }:
+    elsif ($gene eq 'MET' && $function =~ /splice/i) {
+        $moi_count->{'MET exon14 splice variants'}++;
+        return('MET exon14 splice variants', 'Oncogenic', 'Gain-of-function');
+    }
     return ($moi_type, '.', '.');
 }
 

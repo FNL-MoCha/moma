@@ -138,7 +138,7 @@ sub parse_annovar {
             && $var_data{'AAChange'} =~ /UNKNOWN/i;
 
         # DEBUG 
-        # next unless $var_data{'Gene.refGeneWithVer'} eq 'CDKN2A';
+        # next unless $var_data{'Gene'} eq 'FANCI';
         # print "$debug Skipping some entries!\n";
 
         # NOTE: Just some basic obvious filters.
@@ -184,6 +184,8 @@ sub parse_annovar {
         push(@data, {%var_data, %$parsed_data}) if $parsed_data ne 0;
     }
     print "$info Total parsed and retained variants: " . scalar(@data) . "\n";
+    # dd \@data;
+    # __exit__(__LINE__);
     return \@data;
 }
 
@@ -368,6 +370,7 @@ sub read_cantran {
 
 sub __exit__ {
     my ($lineno, $msg) = @_;
+    $msg //= '';
     print colored("Stopped at $lineno with message: '$msg'\n", 
         'bold green on_black');
     exit;
