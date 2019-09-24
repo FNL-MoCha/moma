@@ -11,34 +11,49 @@ use warnings;
 use Carp;
 
 use JSON;
+use Data::Dump;
+use File::Basename;
 
-our $VERSION='0.4.092319';
+our $VERSION='0.7.092419';
 
 sub new {
-    my $class = shift;
-    my $rule_set = shift;
+    my ($class, $rule_set, $tsg_file) = @_;
+
+    # Set defaults if one is not passed.
+    my $__default_rules = dirname(__FILE__) . "/../resource/non-hotspot_rules.json";
+    my $__default_tsgs  = dirname(__FILE__) . "/../resource/gene_reference.csv";
+
+    if (! defined $rule_set) {
+        warn "WARN: Using default Non-Hotspot Rules JSON: " . 
+            basename($__default_rules) . "\n";
+        $rule_set = $__default_rules;
+    }
+    if (! defined $tsg_file) {
+        warn "WARN: Using default TSGs File: " . basename($__default_tsgs) . "\n";
+        $tsg_file = $__default_tsgs;
+    }
 
     my $self = {};
     bless $self, $class;
 
     $self->__load_rules($rule_set);
+    $self->__load_tsgs($tsg_file);
 
     return $self;
 }
 
-sub __load_rules {
-    my ($self, $rules_json) = @_;
-    my $json;
-    { 
-        local $/;
-        open(my $fh, "<", $rules_json);
-        $json = <$fh>;
-        close $fh;
+sub get_category_list {
+    # Get a list of all non-hs rule categories for tallying later.
+    my $self = shift;
+    my %categories;
+
+    for my $gene (keys %{$self->{'rules'}}) {
+        for my $rule (@{$self->{'rules'}{$gene}}) {
+            $categories{$rule->{'category'}} = 0;
+        }
     }
-    my $data = JSON->new->utf8->decode($json);
-    $self->{_version}        = $data->{"metadata"}{"version"};
-    $self->{_oncokb_version} = $data->{"metadata"}{"oncokb_version"};
-    $self->{rules}           = $data->{"rules"};
+    @categories{('Hotspots', 'Truncating in TSG')} = (0,0);
+    return \%categories;
 }
 
 sub check_variant {
@@ -49,46 +64,67 @@ sub check_variant {
     # return the matching rule, and then make sure the function matches.  If so,
     # report the category, oncogenicity, and effect of the variant.
     my ($self, $gene, $aa_start, $aa_end, $function, $exon) = @_;
+    my @tsg_funcs = qw(nonsense stop frameshift splice);
+
+    # print "Incoming variant to test:\n";
+    # print "\tgene: $gene\n\tAA Start: $aa_start\n\tAA End: $aa_end",
+         # "\n\tFunction: $function\n\tExon: $exon\n";
     
-    my ($category, $oncogenicity, $effect) = ('', '', '');
-    my $selected_rule;
+    my ($category, $oncogenicity, $effect) = ('.', '.', '.');
+
+    my $tsg_flag = 1 if ($self->__is_tsg($gene));
 
     if (exists $self->{'rules'}{$gene}) {
+        my $selected_rule;
         my $gene_rules = $self->{'rules'}{$gene};
-        # Check to see if we need to evaluate the amino acid position or the
-        # exon position.
+        # Special TSG or Oncogene
+        # Check to see if we need to evaluate AA or Exon position.
         for (@$gene_rules) {
-            # Run codon test.
             if ($_->{'aa_start'} or $_->{'aa_end'}) {
                 $selected_rule = $self->codon_in_range($aa_start, $aa_end, 
                     $gene_rules);
             }
-            # Run exon test.
             elsif ($_->{'exon'}) {
-                # $selected_rule = $self->check_exon($exon, $gene_rules);
                 $selected_rule = $_ if $self->check_exon($exon, $_);
             }
             last if $selected_rule;
         }
 
-        # If got a rule, then move to check the functional annotation, otherwise
-        # just return the null strings.
+        # print "---------->>  got here. <<----------\n";
+        # print "rule: \n";
+        # dd $selected_rule;
+
+        # We have a TSG with dual gene specific and generic TSG rules, but
+        # variant didn't fit gene specific rule; check functional rules for
+        # generic TSG match.
+        if (! $selected_rule && $tsg_flag) {
+            if ($self->check_function($function, \@tsg_funcs)) {
+                return 'Truncating in TSG', 'Oncogenic', 'Loss-of-Function';
+            }
+        }
+        # If no rule, return the null strings, otherwise continue checking.
         $selected_rule or return $category, $oncogenicity, $effect;
 
-        # Now that there is a selected rule, if there are functional annotation
-        # rules, check them, otherwise, return the category, oncogenicity,
-        # effect as is; we don't care about the function, only the location.
-        if ($selected_rule && @{$selected_rule->{'function'}}) {
-            my $retval = $self->check_function($function, 
-                $selected_rule->{'function'});
-            return $category, $oncogenicity, $effect unless $retval;
-        } 
 
-        # If we made it here, then the rule passes. Capture the oncogenicity
-        # info for the return.
+        # Function Check
+        if (@{$selected_rule->{'function'}}) {
+            if (! $self->check_function($function, $selected_rule->{'function'})) {
+                return $category, $oncogenicity, $effect;
+            }
+        } 
+        # If we made it here, we selected a rule, but there are no
+        # functional annotations to match. Return as is.
         $category = $selected_rule->{'category'};
         $oncogenicity = $selected_rule->{'oncogenicity'};
         $effect = $selected_rule->{'effect'};
+
+        return $category, $oncogenicity, $effect;
+    } 
+    elsif ($tsg_flag) {
+        # Just a plain TSG
+        if ($self->check_function($function, \@tsg_funcs)) {
+            return ('Truncating in TSG', 'Oncogenic', 'Loss-of-Function');
+        }
     }
     return $category, $oncogenicity, $effect;
 }
@@ -98,8 +134,10 @@ sub codon_in_range {
     # rule that matches (if one does!), which we will then check to see if the
     # rest of the conditions match.
     my ($self, $aa_start, $aa_end, $gene_rules) = @_;
-    
-    while (my ($index, $rule) = each @$gene_rules) {
+
+    for my $index (0..$#{$gene_rules}) {
+        my $rule = $gene_rules->[$index];
+
         if ($rule->{'aa_start'} or $rule->{'aa_end'}) {
             # If only given a start bound or end bound, need to set the end
             # bound to a very high number or start bound to 0 (respectively)
@@ -174,7 +212,7 @@ sub codon_in_range {
 sub check_function {
     # Check to see if the functional annotation matches rule.
     my ($self, $function, $rule_func) = @_;
-    (grep $function =~ /$_/, @$rule_func) ? return 1 : return 0;
+    (grep $function =~ /$_/i, @$rule_func) ? return 1 : return 0;
 }
 
 sub check_exon {
@@ -185,6 +223,35 @@ sub check_exon {
     # location, use the string compare op instead. Should still work fine for
     # numbers since 1:1 comprison.
     (grep $exon eq $_, @{$rule_exons->{'exon'}}) ? return 1 : return 0;
+}
+
+sub __load_rules {
+    my ($self, $rules_json) = @_;
+    my $json;
+    { 
+        local $/;
+        open(my $fh, "<", $rules_json);
+        $json = <$fh>;
+        close $fh;
+    }
+    my $data = JSON->new->utf8->decode($json);
+    $self->{version}        = $data->{"metadata"}{"version"};
+    $self->{oncokb_version} = $data->{"metadata"}{"oncokb_version"};
+    $self->{rules}           = $data->{"rules"};
+}
+
+sub __load_tsgs {
+    my ($self, $tsg_file) = @_;
+
+    open(my $fh, "<", $tsg_file);
+    $self->{'tsg_version'} = (split(' ', readline($fh)))[1];
+    readline($fh); # throw out header...don't need it.
+    $self->{'tsgs'}{'genes'} = [map { $_ =~ /Yes$/ ? ((split(/,/, $_))[3]) : () } <$fh>];
+}
+
+sub __is_tsg {
+    my ($self, $gene) = @_;
+    (grep { $gene eq $_ } @{$self->{'tsgs'}{'genes'}}) ? return 1 : return 0;
 }
 
 sub __comp {
