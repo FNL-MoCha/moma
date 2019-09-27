@@ -28,9 +28,9 @@ use NonHotspotRules;
 use constant TRUE => 1;
 use constant FALSE => 0;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
-my $version = "v0.36.092419";
+my $version = "v0.37.092519";
 my $scriptdir = dirname($0);
 
 # Default lookup files.
@@ -38,8 +38,6 @@ my $tsg_file = "$scriptdir/../resource/gene_reference.csv";
 my $hs_bed = "$scriptdir/../resource/mocha_tso500_ctdna_hotspots_v1.072018.bed";
 my $oncokb_file = "$scriptdir/../resource/moma_hotspot_lookup.txt";
 my $nhs_rules_json = "$scriptdir/../resource/non-hotspot_rules.json";
-
-my $nhs_rules = NonHotspotRules->new($nhs_rules_json, $tsg_file);
 
 for my $resource_file ($tsg_file, $hs_bed, $oncokb_file, $nhs_rules_json) {
     die "ERROR: Can not locate necessary resource file '$resource_file'! ",
@@ -55,39 +53,42 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] -a <annotation_method> <maf_file(s)>
+    Program Options:
+        -a, --annot        Method to sue for annotation. Select from "hs_bed" or
+                           "oncokb".
+        -b, --bed          Hotspots BED file to use for annotation. DEFAULT:
+                           $hs_bed
+        -O, --Oncokb_file  OncoKB file to use for annotation. DEFAULT: 
+                           $oncokb_file
+        -n, --nhs_rules    Custom non-hotspot rules JSON file if not using the
+                           default. Consult the documentation for the proper 
+                           formatting of this file. DEFAULT: $nhs_rules_json
+        -T, --TSGs         Custom TSG file to use if not using the default. 
+                           DEFAULT: $tsg_file.
+        -v, --version      Version information
+        -h, --help         Print this help information
+
     Filtering Options:
-    -a, --annot        Method to use for annotation. Select from "hs_bed" or 
-                       "oncokb".
-    -b, --bed          Hotspots BED file to use for annotation. DEFAULT: $hs_bed
-    -O, --Oncokb_file  OncoKB file to use for annotation. DEFAULT: $oncokb_file
-    -p, --popfreq      Which population frequency data to use for filtering,
-                       along with optional frequency threshold. Valid categories 
-                       are "exac, gnomad, or 1000g.  If you want to include the 
-                       threshold above which variants will be filtered, you can
-                       add a colon and a float value for frequency.  For example, 
-                       if you wanted to filter out any variants with a GnomAD 
-                       score above 5%, you can use the option '-p gnomad:0.05' 
-                       (this filter is the default).
-    -n, --nhs_rules    Custom non-hotspot rules JSON file if not using the
-                       default. Consult the documentation for the proper 
-                       formatting of this file. DEFAULT: $nhs_rules_json
+        -p, --popfreq      Which population frequency data to use for filtering,
+                           along with optional frequency threshold. Valid categories 
+                           are "exac, gnomad, or 1000g.  If you want to include the 
+                           threshold above which variants will be filtered, you can
+                           add a colon and a float value for frequency.  For example, 
+                           if you wanted to filter out any variants with a GnomAD 
+                           score above 5%, you can use the option '-p gnomad:0.05' 
+                           (this filter is the default).
 
     Output Options
-    -m, --mois_only    Only output variants that have passed our MOI rules.
-    -t, --trim_file    Output a trimmed data file in addition to the MAF file.
-                       Will only contain some of the most basic output data.
-    -o, --outfile      Write output to custom filename rather than default 
-                       "annotated.maf" file.
-    -l, --logfile      Write log output to a custom filename rather than a file
-                       called "moma_annotator_<today>.log". If you'd rather
-                       not write a physical logfile, then pass `/dev/null` to 
-                       this option.
-    -V, --Verbose      Output messages to STDOUT as well as to a log file, along
-                       with some additional loggin messages and info.
-
-    Other Options
-    -v, --version      Version information
-    -h, --help         Print this help information
+        -m, --mois_only    Only output variants that have passed our MOI rules.
+        -t, --trim_file    Output a trimmed data file in addition to the MAF file.
+                           Will only contain some of the most basic output data.
+        -o, --outfile      Write output to custom filename rather than default 
+                           "annotated.maf" file.
+        -l, --logfile      Write log output to a custom filename rather than a file
+                           called "moma_annotator_<today>.log". If you'd rather
+                           not write a physical logfile, then pass `/dev/null` to 
+                           this option.
+        -V, --Verbose      Output messages to STDOUT as well as to a log file, along
 EOT
 
 my $help;
@@ -100,7 +101,6 @@ my $verbose;
 my $custom_logfile;
 my $wanted_popfreq;
 my $debugging = 0;
-my $custom_nhs_json;
 
 GetOptions( 
     "annot|a=s"     => \$annot_method,
@@ -115,7 +115,8 @@ GetOptions(
     "popfreq|p=s"   => \$wanted_popfreq,
     "logfile|l=s"   => \$custom_logfile,
     "debug|d"       => \$debugging,  # Undocumented.
-    "nsh_rules|n=s" => \$custom_nhs_json,
+    "nsh_rules|n=s" => \$nhs_rules_json,
+    "TSGs|T=s"      => \$tsg_file,
 ) or die $usage;
 
 sub help {
@@ -159,7 +160,7 @@ $verbose = TRUE if $DEBUG;
 my $logfile;
 ($custom_logfile)
     ? ($logfile = $custom_logfile)
-    : ($logfile = 'mocha_oncokb_moi_annotator_' . now('short') . '.log');
+    : ($logfile = 'moma_' . now('short') . '.log');
 
 my $loggers = 'DEBUG, Logfile';
 $loggers .= ', Screen' if $verbose;
@@ -194,7 +195,7 @@ my $loglevel;
 ($DEBUG) ? ($loglevel = 'DEBUG') : ($loglevel = 'INFO');
 $logger->level($loglevel);
 
-my $intro_str = sprintf("\n%s\n\t\t    Starting MoCha OncoKB MOI Annotation " . 
+my $intro_str = sprintf("\n%s\n\t\t    Starting MoCha Oncogenic MOI Annotator " . 
     "Script\n%s\n", "="x80, "="x80);
 $logger->info($intro_str);
 
@@ -208,11 +209,10 @@ if ($annot_method eq 'hs_bed') {
     $annotation_data = read_oncokb_file($oncokb_file);
 }
 
-# Load up TSGs for the non-hs rules
-# TODO: remove TSG reference here?
+# Load up Non-Hotspot Rules module along with the TSGs for the non-hs rules
+# engine.
+my $nhs_rules = NonHotspotRules->new($nhs_rules_json, $tsg_file);
 $logger->info("Using TSG file " . $nhs_rules->{'tsg_version'} . "\n");
-# $logger->info("Using TSG file " . basename($tsg_file));
-# my $tsgs = read_tsgs($tsg_file);
 
 # Set up population frequency filter.
 my $popfreq_category = 'gnomad';
@@ -231,16 +231,12 @@ $logger->info("Using a population frequency filter $popfreq_category -> " .
     # "$popfreq_threshold");
     sprintf("%0.2f", $popfreq_threshold));
 
-$nhs_rules_json = $custom_nhs_json if ($custom_nhs_json && -e $custom_nhs_json);
-
 ################------ END Arg Parsing and Script Setup ------#################
 
 # Process each MAF file
 for my $maf_file (@ARGV) {
     $logger->info( "Annotating '" . basename($maf_file) . "'..." );
     my $results;
-    # TODO
-    # $results = annotate_maf($maf_file, $annotation_data, $tsgs);
     $results = annotate_maf($maf_file, $annotation_data);
 
     # Print results.
@@ -249,53 +245,11 @@ for my $maf_file (@ARGV) {
         ? ($new_file = $outfile)
         : (($new_file = $maf_file) =~ s/\.truncmaf/.annotated.maf/);
     $logger->info( "Finished annotating. Printing results..." );
+    # XXX
     print_results($results, $new_file, $mois_only, $trim_file);
     $logger->info("Done with $maf_file!\n\n");
 }
 
-sub print_results {
-    # TODO: Do we want to use Text::CSV here to ensure good formatting, or would
-    # it be better not to worry about it?  
-    my ($data, $filename, $filter, $trim_file) = @_;
-    
-    my $filter_status;
-    ($filter) ? ($filter_status = 'on') : ($filter_status = 'off');
-    $logger->info( "Writing results to $filename (filter is $filter_status)");
-    #print "Writing results to $filename (filter is $filter_status)\n";
-
-    open(my $outfh, ">", $filename);
-
-    my @trim_fields = qw(Hugo_Symbol Entrez_Gene_Id Chromosome Start_Position
-         End_Position Strand Variant_Classification Variant_Type Reference_Allele
-         Tumor_Seq_Allele1 Tumor_Seq_Allele2 Tumor_Sample_Barcode 
-         Matched_Norm_Sample_Barcode HGVSc HGVSp HGVSp_Short Transcript_ID 
-         t_depth t_ref_count t_alt_count n_depth n_ref_count n_alt_count 
-         Existing_variation RefSeq SIFT PolyPhen ExAC_AF gnomAD_AF i_TumorVAF
-         MOI_Type Oncogenicity Effect
-    );
-
-    my $trimfh;
-    if ($trim_file) {
-        $logger->info( "Also generating a trimmed output file.");
-        (my $trim_outfile = $filename) =~ s/\.(.*?)$/_trimmed.tsv/;
-        open($trimfh, ">", $trim_outfile);
-        print {$trimfh} join("\t", @trim_fields), "\n";
-    };
-
-    # Print headers based on original order.
-    my @header = sort{ 
-        versioncmp($data->[0]{$a}, $data->[0]{$b}) }
-    keys %{$data->[0]};
-    shift @$data;
-    print {$outfh} join("\t", @header), "\n";
-
-    for my $var (@$data) {
-        my @variant_data = @$var{@header};
-        next if $variant_data[-1] eq '.' and $filter; 
-        print {$outfh}  join("\t", @variant_data), "\n";
-        print {$trimfh} join("\t", @$var{@trim_fields}), "\n" if ($trim_file);
-    }
-}
 
 sub annotate_maf {
     my ($maf, $hotspots) = @_;
@@ -339,9 +293,6 @@ sub annotate_maf {
 
         # If splice mutation, location may be intronic, and we need to have a
         # val for 'exon' anyway.
-        # TODO
-        # FIXME: Not sure if i really want it this way. Maybe shoudl keep it as
-        # --- or use a '0' as an exon number. 
         $exon = 'splicesite' if ($exon eq '' and $function =~ /splice/);
 
         do { 
@@ -375,6 +326,7 @@ sub annotate_maf {
             # Check to see if captured by non-hotspot rule.
             ($category, $oncogenicity, $effect) = run_nonhs_rules($gene, $exon,
                 $hgvs_p, $function);
+            $moi_summary->{$category}++ unless $category eq '.';
         }
 
         @var_data{qw(variant_id MOI_Type Oncogenicity Effect)} = ($hsid, 
@@ -389,32 +341,72 @@ sub annotate_maf {
         push(@results, {%var_data});
     }
 
-    # XXX
-    dd \@results;
-    __exit__(__LINE__, 'Stopping after running NHS rules. Just need to finish' .
-        'the tally for the final output and log file.');
-
-    # Add these new elements to our saved header in @results.
-    # TODO: What am I doing here?
+    # Add these new elements with their index to our saved header in @results.
     for my $term (qw(MOI_Type Oncogenicity Effect)) {
         $results[0]->{$term} = $tot_header_elems++;
     }
         
-    $logger->info(sprintf("\n>>>  Variant Summary  <<<\nTotal variants:\t%3s\nFiltered " .
-        "out:\t%3s\nRetained:\t\t%3s\n", $var_count, $filter_count, 
-        $var_count-$filter_count)
+    $logger->info(sprintf("\n>>>  Variant Summary  <<<\n\tTotal variants:" .
+            "\t%3s\n\tFiltered out:\t%3s\n\tRetained:\t%3s\n", $var_count, 
+            $filter_count, $var_count-$filter_count)
     );
 
-    # TODO: FIXME: Need to pick this back up once we have a better count.
-    # my $moi_count_string;
-    # for (sort keys %moi_count) {
-        # $moi_count_string .= sprintf("%-42s: %s\n", $_, $moi_count{$_});
-    # }
-    # $logger->info("\n>>>  MOI Counts  <<<\n$moi_count_string" );
+    my $moi_count_string;
+    my $total = 0;
+
+    for (sort keys %$moi_summary) {
+        $moi_count_string .= sprintf("\t%-50s: %s\n", $_, $moi_summary->{$_});
+        $total += $moi_summary->{$_};
+    }
+    my $tot_string = sprintf("\t%s\n\t%-50s: %s\n\n", '='x55, 'Total MOIs', $total);
+    $moi_count_string .= $tot_string;
+    $logger->info("\n>>>  MOI Counts  <<<\n$moi_count_string" );
 
     # dd \@results;
-    exit;
+    # exit;
     return \@results;
+}
+
+sub print_results {
+    my ($data, $filename, $filter, $trim_file) = @_;
+    
+    my $filter_status;
+    ($filter) ? ($filter_status = 'on') : ($filter_status = 'off');
+    $logger->info( "Writing results to $filename (filter is $filter_status)");
+    #print "Writing results to $filename (filter is $filter_status)\n";
+
+    open(my $outfh, ">", $filename);
+
+    my @trim_fields = qw(Hugo_Symbol Entrez_Gene_Id Chromosome Start_Position
+         End_Position Strand Variant_Classification Variant_Type Reference_Allele
+         Tumor_Seq_Allele1 Tumor_Seq_Allele2 Tumor_Sample_Barcode 
+         Matched_Norm_Sample_Barcode HGVSc HGVSp HGVSp_Short Transcript_ID 
+         t_depth t_ref_count t_alt_count n_depth n_ref_count n_alt_count 
+         Existing_variation RefSeq SIFT PolyPhen ExAC_AF gnomAD_AF i_TumorVAF
+         MOI_Type Oncogenicity Effect
+    );
+
+    my $trimfh;
+    if ($trim_file) {
+        $logger->info( "Also generating a trimmed output file.");
+        (my $trim_outfile = $filename) =~ s/\.(.*?)$/_trimmed.tsv/;
+        open($trimfh, ">", $trim_outfile);
+        print {$trimfh} join("\t", @trim_fields), "\n";
+    };
+
+    # Print headers based on original order.
+    my @header = sort{ 
+        versioncmp($data->[0]{$a}, $data->[0]{$b}) }
+    keys %{$data->[0]};
+    shift @$data;
+    print {$outfh} join("\t", @header), "\n";
+
+    for my $var (@$data) {
+        my @variant_data = @$var{@header};
+        next if $variant_data[-1] eq '.' and $filter; 
+        print {$outfh}  join("\t", @variant_data), "\n";
+        print {$trimfh} join("\t", @$var{@trim_fields}), "\n" if ($trim_file);
+    }
 }
 
 sub filter_var {
@@ -471,6 +463,7 @@ sub run_nonhs_rules {
     # Look for non-hotspot MOIs in the data. Return after the first hit, even
     # though some variants may fit into more than one category.
     my ($gene, $location, $hgvs_p, $function) = @_;
+
 
     my $exon = (split(/\//, $location))[0];
     # if data coming from annovar, will not have the "exon#/total_exons" string.
