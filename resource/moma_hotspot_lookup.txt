@@ -1,4 +1,4 @@
-#version: 4.0.072219
+#version: 4.1.092719
 Hugo Symbol	RefSeq	Protein Change	Oncogenicity	Mutation Effect	varid
 ABL1	NM_005157.4	p.H396R	Likely Oncogenic	Likely Gain-of-function	NM_005157.4(ABL1):p.H396R
 ABL1	NM_005157.4	p.T315A	Oncogenic	Gain-of-function	NM_005157.4(ABL1):p.T315A
@@ -4154,7 +4154,6 @@ TP53	NM_000546.5	p.P278R	Likely Oncogenic	Loss-of-function	NM_000546.5(TP53):p.P
 TP53	NM_000546.5	p.G245D	Likely Oncogenic	Likely Loss-of-function	NM_000546.5(TP53):p.G245D
 TP53	NM_000546.5	p.L344R	Likely Oncogenic	Likely Loss-of-function	NM_000546.5(TP53):p.L344R
 TRIP13	NM_004237.3	p.R354*	Likely Oncogenic	Likely Loss-of-function	NM_004237.3(TRIP13):p.R354*
-TSC1	NM_000368.4	p.S1043del	Likely Oncogenic	Loss-of-function	NM_000368.4(TSC1):p.S1043del
 TSC1	NM_000368.4	p.M224R	Oncogenic	Loss-of-function	NM_000368.4(TSC1):p.M224R
 TSC1	NM_000368.4	p.S35Q	Likely Oncogenic	Loss-of-function	NM_000368.4(TSC1):p.S35Q
 TSC1	NM_000368.4	p.N198_F199delinsI	Likely Oncogenic	Loss-of-function	NM_000368.4(TSC1):p.N198_F199delinsI
