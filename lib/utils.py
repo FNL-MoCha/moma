@@ -6,6 +6,7 @@ import inspect
 import datetime
 
 from termcolor import cprint
+from pprint import pprint
 
 
 def __exit__(line=None, msg=None, color=None):
@@ -26,3 +27,6 @@ def __exit__(line=None, msg=None, color=None):
 
 def today():
         return datetime.datetime.today().strftime('%Y%m%d')
+
+def pp(data):
+    pprint(data, stream=sys.stderr)
