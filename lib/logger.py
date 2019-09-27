@@ -26,12 +26,15 @@ class Logger(object):
                 attrs=['bold']) if colored_output else "ERROR"
         debug_tag = colored("DEBUG", 'cyan', 
                 attrs=['bold']) if colored_output else "DEBUG"
+        note_tag = colored("NOTE", 'magenta', 
+                attrs=['bold']) if colored_output else "NOTE"
 
         self.colored_output = colored_output
         self.quiet = quiet
 
         self.log_levels = {
             'info'   : (0, info_tag), 
+            'note'   : (0, note_tag),
             'warn'   : (1, warn_tag), 
             'error'  : (2, error_tag), 
             'debug'  : (3, debug_tag),
