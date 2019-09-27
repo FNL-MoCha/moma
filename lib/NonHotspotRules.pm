@@ -64,12 +64,8 @@ sub check_variant {
     # return the matching rule, and then make sure the function matches.  If so,
     # report the category, oncogenicity, and effect of the variant.
     my ($self, $gene, $aa_start, $aa_end, $function, $exon) = @_;
-    my @tsg_funcs = qw(nonsense stop frameshift splice);
 
-    # print "Incoming variant to test:\n";
-    # print "\tgene: $gene\n\tAA Start: $aa_start\n\tAA End: $aa_end",
-         # "\n\tFunction: $function\n\tExon: $exon\n";
-    
+    my @tsg_funcs = qw(nonsense stop frameshift splice);
     my ($category, $oncogenicity, $effect) = ('.', '.', '.');
 
     my $tsg_flag = 1 if ($self->__is_tsg($gene));
@@ -89,10 +85,6 @@ sub check_variant {
             }
             last if $selected_rule;
         }
-
-        # print "---------->>  got here. <<----------\n";
-        # print "rule: \n";
-        # dd $selected_rule;
 
         # We have a TSG with dual gene specific and generic TSG rules, but
         # variant didn't fit gene specific rule; check functional rules for
