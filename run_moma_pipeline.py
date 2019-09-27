@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# 06/2019 - D Sims
+################################################################################
 """
 MoCha Oncogenic Mutation Annotator Tool (MOMA)
 This utility will take a VCF file from MoCha pipelines including the Oncomine
@@ -18,7 +20,6 @@ import shutil
 import argparse
 import subprocess
 
-from pprint import pprint as pp # noqa
 from pprint import pformat # noqa
 from textwrap import indent # noqa
 from operator import itemgetter
@@ -26,28 +27,36 @@ from collections import defaultdict
 from natsort import natsorted
 
 from lib import logger
-from lib import utils # noqa
+from lib import utils
 
-version = '0.12.20190911-dev'
+version = '0.13.20190926-dev'
+
 
 # Globals
+verbose = False
+debug = False
+
+# Global Paths
 output_root = os.getcwd()
+outdir_path = os.path.abspath(output_root)
 package_root = os.path.dirname(__file__)
 scripts_dir = os.path.join(package_root, 'scripts')
 lib = os.path.join(package_root, 'lib')
-
 resources = os.path.join(package_root, 'resource')
+
+# Default resource files.
 oncokb_cnv_file = os.path.join(resources, 'moma_cnv_lookup.tsv')
 oncokb_fusion_lookup = os.path.join(resources, 'moma_fusion_genes.tsv')
 blacklist_file = os.path.join(resources, 'blacklisted_vars.txt')
-outdir_path = os.path.abspath(output_root)
-debug = False
 
+# Set up the logger.
 logfile = 'moma_reporter_{}.log'.format(utils.today())
 logger = logger.Logger(loglevel='debug', colored_output=True, dest=logfile)
 
 
 def get_args():
+    global verbose
+
     parser = argparse.ArgumentParser(description = __doc__)
     parser.add_argument(
         'vcf', 
@@ -74,12 +83,6 @@ def get_args():
         '-n', '--name', 
         metavar="<sample_name>", 
         help='Sample name to use for output.'
-    )
-    parser.add_argument(
-        '-q', '--quiet',
-        action='store_true',
-        help='Suppress output to the command line.  Will still write to log '
-             'file.'
     )
     parser.add_argument(
         '-o', '--outdir', 
@@ -130,14 +133,45 @@ def get_args():
             'filtered out.'
     )
     parser.add_argument(
+        '-q', '--quiet',
+        action='store_true',
+        help='Suppress output to the command line.  Will still write to log '
+             'file.'
+    )
+    parser.add_argument(
+        '-V', '--Verbose',
+        action='store_true',
+        help='Output more log messages and general stderr messages.'
+    )
+    '''
+    Undocumented arg to help with testing and debugging. This will skip the
+    Annovar step so that you can focus on just processing the data. Instead
+    of supplying a VCF and running Annovar, you merely need to submit the
+    Annovar file as though it were a VCF instead.
+    '''
+    parser.add_argument(
+        '--noanno',
+        action='store_true',
+        help=argparse.SUPPRESS
+    )
+    parser.add_argument(
         '-v', '--version', 
         action='version',
         version='%(prog)s - v' + version
     )
     args = parser.parse_args()
 
+    # Turn off stdout display of log messages and only write to the logfile.
     if args.quiet is False:
         logger.quiet = False
+
+    if args.Verbose:
+        verbose = True
+
+    if not os.path.exists(args.vcf):
+        logger.write_log('error', f'VCF file {args.vcf} can not be processed! '
+                'No such file or directory!')
+        sys.exit(1)
 
     return args
 
@@ -164,7 +198,7 @@ def simplify_vcf(vcf, outdir):
     """
     new_name = '{}_simple.vcf'.format(os.path.join(outdir, vcf.rstrip('.vcf')))
     cmd = [os.path.join(scripts_dir, 'simplify_vcf.pl'), '-f', new_name, vcf]
-    status = run(cmd, 'simplify the Ion VCF')
+    status = run(cmd, 'simplify the Ion VCF', silent=not verbose)
     if status:
         logger.write_log("error", "Could not run `simplify_vcf.pl`. Exiting.")
         sys.exit(1)
@@ -182,7 +216,7 @@ def run_annovar(simple_vcf, sample_name):
     file_path = f'{outdir_path}/{sample_name}'
     cmd = [os.path.join(scripts_dir, 'annovar_wrapper.sh'), simple_vcf,
             file_path]
-    status = run(cmd, 'annotate VCF with Annovar')
+    status = run(cmd, 'annotate VCF with Annovar', silent=not verbose)
 
     if status:
         sys.exit(1)
@@ -198,28 +232,49 @@ def run_annovar(simple_vcf, sample_name):
 def generate_report(annovar_data, genes, outfile):
     """
     Process the OncoKB annotated Annovar data to filter out data by gene, 
-    population frequency, and any other filter.
+    population frequency, and any other filter. Use `wanted_fields` to order the
+    output.
     """
     with open(outfile, 'w') as outfh:
         csv_writer = csv.writer(outfh, lineterminator="\n", delimiter=",")
-        wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
-            'Tumor_Seq_Allele2', 'vaf', 'avsnp142', 'cosid', 'Hugo_Symbol', 
-            'Transcript_ID', 'HGVSc', 'HGVSp_Short', 'Exon_Number', 
-            'Variant_Classification', 'sift', 'polyphen', 'CLNSIG', 'CLNREVSTAT',
-            'MOI_Type', 'Oncogenicity', 'Effect')
+        #  wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
+            #  'Tumor_Seq_Allele2', 'vaf', 'ref_reads', 'alt_reads', 'avsnp142', 
+            #  'cosid', 'Hugo_Symbol', 'Transcript_ID', 'HGVSc', 'HGVSp_Short', 
+            #  'Exon_Number', 'Variant_Classification', 'sift', 'polyphen', 
+            #  'CLNSIG', 'CLNREVSTAT', '1000g_mean', 'exac_mean', 'gnomad_mean',
+            #  'MOI_Type', 'Oncogenicity', 'Effect')
+            
 
-        csv_writer.writerow(('Chr', 'Pos', 'Ref', 'Alt', 'VAF', 'dbSNP_Id',
-            'COSMIC_Id', 'Gene', 'Transcript', 'CDS', 'AA', 'Location', 
-            'Function', 'Sift', 'Polyphen', 'Clinvar_Significance', 
-            'Clinvar_Review_Status', 'MOI_Type', 'Oncogenicity', 'Effect'))
+        #  csv_writer.writerow(('Chr', 'Pos', 'Ref', 'Alt', 'VAF', 'Ref_Reads',
+            #  'Alt_Reads', 'dbSNP_Id', 'COSMIC_Id', 'Gene', 'Transcript', 'CDS',
+            #  'AA', 'Location', 'Function', 'Sift', 'Polyphen', 
+            #  'Clinvar_Significance', 'Clinvar_Review_Status', '1000G_Mean', 
+            #  'ExAC_Mean', 'GnomAD_Mean', 'MOI_Type', 'Oncogenicity', 'Effect'))
+
+        wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
+            'Tumor_Seq_Allele2', 'vaf', 'ref_reads', 'alt_reads', 'avsnp142', 
+            'cosid', 'Hugo_Symbol', 'Transcript_ID', 'HGVSc', 'HGVSp_Short', 
+            'Exon_Number', 'Variant_Classification', 'sift', 'polyphen', 
+            'CLNSIG', 'CLNREVSTAT', 'MOI_Type', 'Oncogenicity', 'Effect')
+
+        csv_writer.writerow(('Chr', 'Pos', 'Ref', 'Alt', 'VAF', 'Ref_Reads',
+            'Alt_Reads', 'dbSNP_Id', 'COSMIC_Id', 'Gene', 'Transcript', 'CDS',
+            'AA', 'Location', 'Function', 'Sift', 'Polyphen', 
+            'Clinvar_Significance', 'Clinvar_Review_Status', 'MOI_Type', 
+            'Oncogenicity', 'Effect'))
 
         for var in natsorted(annovar_data.keys(), 
-                key=lambda k: (k.split(':')[0], k.split(':')[1])):
+                key=lambda k: (k.split(':')[1], k.split(':')[2])):
             if genes and annovar_data[var]['Hugo_Symbol'] not in genes:
                 continue
-            csv_writer.writerow([annovar_data[var][x] for x in wanted_fields])
+            try:
+                csv_writer.writerow([annovar_data[var][x] for x in wanted_fields])
+            except:
+                print("ERROR with entry:")
+                utils.pp(var)
+                sys.exit()
 
-def run(cmd, task, ret_data=False):
+def run(cmd, task, ret_data=False, silent=True):
     """
     Generic subprocess runner. Can return results if `ret_data` set to True
     """
@@ -231,21 +286,21 @@ def run(cmd, task, ret_data=False):
             bufsize=1,
             universal_newlines=False
         ) as proc:
-        logger.write_log('info', 'Messages from %s:' % task)
+
+        if not silent:
+            logger.write_log('info', 'Messages from %s:' % task)
+
         for line in proc.stdout:
             if ret_data:
                 data.append(line.decode('utf-8'))
             else:
-                logger.write_log('', line.decode("utf-8"))
+                if not silent:
+                    logger.write_log('', line.decode("utf-8"))
 
     if proc.returncode != 0:
         logger.write_log('error', 'An error has occurred while trying to %s' %
                 task)
-        #  logger.write_log('', subprocess.CalledProcessError(proc.returncode))
-        #  logger.write_log('', subprocess.CalledProcessError(proc.returncode,
-            #  ' '.join(proc.args)))
         raise subprocess.CalledProcessError(proc.returncode, ' '.join(proc.args))
-
     return data
 
 def __load_blacklist():
@@ -265,12 +320,12 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
         header = amaf_fh.readline().rstrip('\n').split('\t')
         for line in amaf_fh:
             data = line.rstrip('\n').split('\t')
-            varid = ':'.join(itemgetter(*[1,2,4,5])(data))
+            varid = ':'.join(itemgetter(*[0,1,2,4,5])(data))
 
             # Check to see if variant is in blacklist
             if varid in blacklist_vars:
-                logger.write_log('', 'Removing variant {}:{}:{} because it is '
-                    'blacklisted.'.format(data[0], data[8], varid))
+                logger.write_log('note', 'Removing variant {}:{} because it is '
+                    'blacklisted.'.format(varid, data[8]))
                 continue
             final_data[varid] = dict(zip(header, data))
 
@@ -280,15 +335,20 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
         header.extend(['Otherinfo1', 'Otherinfo2', 'vcf_chr', 'vcf_pos',
             'vcf_id', 'vcf_ref', 'vcf_alt', 'vcf_qual', 'vcf_filter',
             'vcf_info', 'vcf_format', 'vcf_sample'])
+
+        header = list(map(lambda x: x.split('.')[0], header))
+
         for line in annovar_fh:
             data = dict(zip(header, line.rstrip('\n').split('\t')))
-            varid = ':'.join(itemgetter(*['Chr', 'Start', 'Ref', 'Alt'])(data))
+
+            varid = ':'.join(itemgetter(*['Gene', 'Chr', 'Start', 'Ref', 
+                'Alt'])(data))
 
             if varid in final_data:
                 # Work on the VAF data.
                 vaf_data = data['vcf_info'] if source == 'oca' else data['vcf_sample']
                 if vaf_data.startswith('./.'):
-                    logger.write_log('warn', 'Removing entry for {} because it '
+                    logger.write_log('note', 'Removing entry for {} because it '
                         'is a NOCALL that should be filtered out.'.format(varid))
                     del final_data[varid]
                     continue
@@ -303,29 +363,51 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
                     utils.__exit__(msg='Issue getting VAF for {}; vaf_str: '
                         '{}'.format(varid, vaf_data), color='red')
 
+                # Depending on the VCF, can get sub 1% VAF variants even if not
+                # running a ctDNA assay. Want those filtered out.
+                if source != 'tso500' and float(vaf) < 1:
+                    logger.write_log('note', 'Removing variant {} because VAF '
+                        'is <1% and this is not ctDNA assay data.'.format(varid))
+                    del final_data[varid]
+                    continue
+
                 cov_info = data['vcf_sample'].split(':')[1]
                 if ',' not in cov_info: continue
                 try:
                     ref_reads, alt_reads = cov_info.split(',')
                 except:
-                    pp(data['vcf_sample'])
+                    utils.pp(data['vcf_sample'])
                     sys.exit(1)
 
                 new = {
-                    'sift'       : __translate(data['SIFT_pred']),
-                    'polyphen'   : __translate(data['Polyphen2_HDIV_pred']),
-                    'vaf'        : vaf,
-                    'alt_reads'  : alt_reads,
-                    'ref_reads'  : ref_reads,
-                    'CLNREVSTAT' : data['CLNREVSTAT'],
-                    'CLNSIG'     : data['CLNSIG'],
-                    'cosid'      : __get_cosmic_id(data['cosmic89_noEnst'])
+                    'sift'        : __translate(data['SIFT_pred']),
+                    'polyphen'    : __translate(data['Polyphen2_HDIV_pred']),
+                    'vaf'         : vaf,
+                    'alt_reads'   : alt_reads,
+                    'ref_reads'   : ref_reads,
+                    'CLNREVSTAT'  : data['CLNREVSTAT'],
+                    'CLNSIG'      : data['CLNSIG'],
+                    'cosid'       : __get_cosmic_id(data['cosmic89_noEnst']),
+                    'max_popfreq' : data['PopFreqMax'],
+                    '1000g_mean'  : __get_avg_pop(data, '1000G'),
+                    'exac_mean'   : __get_avg_pop(data, 'ExAC'),
+                    'gnomad_mean' : __get_avg_pop(data, 'GnomAD')
                 }
                 final_data[varid].update(new)
-    # XXX
-    #  pp(final_data)
-    #  utils.__exit__()
     return dict(final_data)
+
+def __get_avg_pop(annovar_data, population):
+    """
+    Read in a set of population frequency data, and return the average.
+    """
+    freq_data = [annovar_data[x] for x in annovar_data if population in x]
+    # For some reason, the Annovar population frequency data can show up as '0.'
+    # instead of just '0', and the dot screws stuff up.  
+    freq_data = list(map(lambda x: x.split('.')[0] if x == '0.' else x,
+        freq_data))
+
+    freqs = [float(x) for x in freq_data if x.replace('.','',1).isdigit()]
+    return (sum(freqs) / len(freqs)) if freqs else '.'
 
 def __get_cosmic_id(cosmic_data):
     """
@@ -368,7 +450,7 @@ def oncokb_annotate(annovar_file, source, popfreq):
     trunc_maf = annovar_file.replace('.txt', '.truncmaf')
     annovar2maf_cmd = [os.path.join(scripts_dir, 'annovar2maf.pl'), '-o', 
             trunc_maf, annovar_file]
-    run(annovar2maf_cmd, 'Annovar2MAF')
+    run(annovar2maf_cmd, 'Annovar2MAF', silent=not verbose)
 
     # Use TSO500 to annotate the truncated MAF file.
     logger.write_log('info', 'Running MOMA')
@@ -383,7 +465,15 @@ def oncokb_annotate(annovar_file, source, popfreq):
         '-l', '/dev/null',
         trunc_maf
     )
-    run(oncokb_annot_cmd, 'MoCha OncoKB MOI Annotator')
+
+    summary_report = run(oncokb_annot_cmd, 'MoCha OncoKB MOI Annotator', 
+            ret_data=True, silent=not verbose)
+
+    # Always want the summary report from MOMA to make it to at least the log
+    # file, even if we have asked for non-verbose run.
+    logger.write_log('info', 'MOMA Summary Report:')
+    for line in summary_report:
+        logger.write_log('', line)
 
     # Marry the new OncoKB annotations with the original Annovar Data.
     logger.write_log('info', 'Combining Annovar data with OncoKB annotations, '
@@ -396,13 +486,9 @@ def gen_cnv_report(vcf, cu, cl, genelist, outfile):
     as well.
     """
     cnv_data = []
-    cmd = (
-        os.path.join(scripts_dir, 'get_cnvs.pl'), 
-        '--cu', cu,
-        '--cl', cl,
-        vcf
-    )
-    cnv_results = run(cmd, "Generating Oncomine CNV results data", True)
+    cmd = (os.path.join(scripts_dir, 'get_cnvs.pl'), '--cu', cu, '--cl', cl, vcf)
+    cnv_results = run(cmd, "Generating Oncomine CNV results data", True,
+            silent=not verbose)
     header = cnv_results.pop(0).rstrip('\n').split(',')
 
     # If we have results, then generate a report.  Else, bail out.
@@ -489,7 +575,8 @@ def gen_fusion_report(vcf, reads, genelist, filename):
         cmd[3:3] = ['--gene', ','.join(genelist)]
 
     fusion_data = []
-    fusion_results = run(cmd, "Generating Oncomine Fusion results data", True)
+    fusion_results = run(cmd, "Generating Oncomine Fusion results data", True,
+            silent=not verbose)
     header = fusion_results.pop(0).rstrip('\n').split(',')
 
     if fusion_results:
@@ -551,9 +638,6 @@ def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
             outfh.write(f'\n\n::: Fusion Data Report for {sample_name}  :::\n')
             var_data = __read_report(fusion_report)
             outfh.write('\n'.join(var_data))
-
-        # Need trailing newline or will have some problems later on if we are
-        # trying to combine, merge, etc. reports.
         outfh.write('\n')
 
 def __read_report(report):
@@ -561,22 +645,28 @@ def __read_report(report):
         return [line.rstrip('\n') for line in fh]
 
 def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
-        get_fusions, reads, outdir, quiet, keep_intermediate_files):
+        get_fusions, reads, outdir, keep_intermediate_files, noanno):
 
-    pipeline_version = ''
-    with open(os.path.join(package_root, '_version.py')) as fh:
-        pipeline_version = fh.readline().rstrip("'\n'").split("'")[1]
-    welcome_str = ('{0}\n:::::  Running the MoCha Oncogenic Mutation Annotator '
-        '(MOMA) pipeline - v{1}  :::::\n{0}\n'.format('='*97, 
-            pipeline_version))
-    logger.write_log('header', welcome_str)
+    global outdir_path, debug, verbose
+
+    if debug:
+        sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}',
+            '\u001b[0m\n\n'.format(decor='='*25))
+
+    if not noanno:
+        pipeline_version = ''
+        with open(os.path.join(package_root, '_version.py')) as fh:
+            pipeline_version = fh.readline().rstrip("'\n'").split("'")[1]
+        welcome_str = ('{0}\n:::::  Running the MoCha Oncogenic Mutation Annotator '
+            '(MOMA) pipeline - v{1}  :::::\n{0}\n'.format('='*97, 
+                pipeline_version))
+        logger.write_log('header', welcome_str)
 
     # Create an output directory based on the sample_name
     if sample_name is None:
         sample_name = get_name_from_vcf(vcf)
     logger.write_log('info', f'Processing sample: {sample_name}')
         
-    global outdir_path
     if outdir is None:
         outdir_path = os.path.join(outdir_path, '%s_out' % sample_name)
     else:
@@ -584,31 +674,31 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     logger.write_log('debug', 
             f'Selected destination dir for data is: {outdir_path}')
 
-    #  """
-    #XXX Add back in!
-    if not os.path.exists(outdir_path):
-        os.mkdir(os.path.abspath(outdir_path), 0o755)
-
-    # Simplify the VCF
-    if data_source == 'oca':
-        logger.write_log('info', 'Simplifying the VCF file.')
-        num_vars, simple_vcf = simplify_vcf(vcf, outdir_path)
-        logger.write_log('info', 'Done simplifying VCF file. There are %s '
-            'variants in this specimen.' % str(num_vars))
+    if noanno:
+        sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}'
+            '\u001b[0m\n'.format(decor='='*35))
+        sys.stderr.write('\u001b[33m\t\t===>  Running without Annovar annotation'
+                '  <===\u001b[0m\n\n')
+        annovar_file = vcf
     else:
-        logger.write_log('info', 'VCF already ready for processing with '
-            'Annovar.')
-        simple_vcf = vcf
+        if not os.path.exists(outdir_path):
+            os.mkdir(os.path.abspath(outdir_path), 0o755)
 
-    # Annotate the vcf with ANNOVAR.
-    logger.write_log('info', 'Annotating the simplified VCF file with Annovar.')
-    annovar_file = run_annovar(simple_vcf, sample_name)
+        # Simplify the VCF
+        if data_source == 'oca':
+            logger.write_log('info', 'Simplifying the VCF file.')
+            num_vars, simple_vcf = simplify_vcf(vcf, outdir_path)
+            logger.write_log('info', 'Done simplifying VCF file. There are %s '
+                'variants in this specimen.' % str(num_vars))
+        else:
+            logger.write_log('info', 'VCF already ready for processing with '
+                'Annovar.')
+            simple_vcf = vcf
 
-    #  """
-    #  sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}\u001b[0m\n\n'.format(decor='='*25))
-
-    # TODO: Remove this.
-    #  annovar_file = vcf
+        # Annotate the vcf with ANNOVAR.
+        logger.write_log('info', 'Annotating the simplified VCF file with '
+             'Annovar.')
+        annovar_file = run_annovar(simple_vcf, sample_name)
 
     # Implement the MOMA here.
     logger.write_log('info', 'Running OncoKB Filter rules on data to look for '
@@ -616,8 +706,9 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     oncokb_annotated_data = oncokb_annotate(annovar_file, data_source, popfreq) 
 
     # XXX
-    #  pp(oncokb_annotated_data)
+    #  utils.pp(oncokb_annotated_data)
     #  utils.__exit__()
+
 
     # Generate a filtered CSV file of results for the report.
     mutation_report = os.path.join(outdir_path, 
@@ -648,10 +739,6 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         gen_fusion_report(vcf, reads, genelist, fusion_report)
         logger.write_log('info', "Done with Fusions report.")
 
-    # TODO: Remove this.
-    #  sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
-    #  sys.exit()
-
     # Combine the three reports into one master report.
     combine_reports(sample_name, mutation_report, cnv_report, fusion_report, 
             outdir_path)
@@ -671,12 +758,17 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     logger.write_log('info', 'MoCha OncoKB Annotator Pipline completed '
          'successfully! Data can be found in %s.' % outdir_path)
 
+    if debug:
+        sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
+        sys.exit()
+
 if __name__ == '__main__':
     args = get_args()
 
-    #  args_dict = pformat(vars(args))
-    #  logger.write_log('debug', "Args passed to the script:\n{}".format(
-        #  indent(args_dict, '    ')))
+    if debug:
+        args_dict = pformat(vars(args))
+        logger.write_log('debug', "Args passed to the script:\n{}".format(
+            indent(args_dict, '    ')))
 
     if args.genes == 'all':
         genelist = []
@@ -684,5 +776,5 @@ if __name__ == '__main__':
         genelist = args.genes.split(',')
 
     main(args.vcf, args.source, args.name, genelist, args.popfreq, args.CNV, 
-            args.cu, args.cl, args.Fusion, args.reads, args.outdir, args.quiet,
-            args.keep)
+            args.cu, args.cl, args.Fusion, args.reads, args.outdir, args.keep,
+            args.noanno)
