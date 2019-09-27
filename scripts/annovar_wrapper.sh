@@ -41,8 +41,8 @@ $ANNOVAR_ROOT/table_annovar.pl \
     -remove \
     -nastring . \
     -outfile $outpath \
-    -protocol trunc_refGene,cosmic89_noEnst,avsnp142,dbnsfp35a,clinvar_20190305,popfreq_all_20150413 \
-    -operation g,f,f,f,f,f \
-    -argument '-hgvs -splicing_threshold 5,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs' \
+    -protocol trunc_refGene,cosmic89_noEnst,avsnp142,dbnsfp35a,clinvar_20190305,popfreq_all_20150413,gnomad_exome \
+    -operation g,f,f,f,f,f,f \
+    -argument '-hgvs -splicing_threshold 5,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs,-hgvs' \
     -vcfinput $vcf \
     $ANNOVAR_DB \
