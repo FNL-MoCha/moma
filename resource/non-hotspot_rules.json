@@ -106,8 +106,8 @@
                 "aa_end" : "",
                 "function" : ["inframe", "missense"],
                 "category" : "KIT Mutations in Exons 9, 11, 13, 14, or 17",
-                "oncogenicity" : "likely oncogenic",
-                "effect" : "gain-of-function"
+                "oncogenicity" : "Likely Oncogenic",
+                "effect" : "Gain-of-function"
             }
         ],
         "TP53" : [
