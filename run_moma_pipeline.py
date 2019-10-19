@@ -29,7 +29,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils
 
-version = '0.13.20190926-dev'
+version = '0.15.20191018-dev'
 
 
 # Globals
@@ -52,6 +52,15 @@ blacklist_file = os.path.join(resources, 'blacklisted_vars.txt')
 # Set up the logger.
 logfile = 'moma_reporter_{}.log'.format(utils.today())
 logger = logger.Logger(loglevel='debug', colored_output=True, dest=logfile)
+
+# Default Thresholds
+pfreq = '0.01'  # Max pop frequency < 1%
+camp = '4'      # 95% confidence interval >= 4 copies for amplification
+closs = '1'     # 5% confidence interval <= 1 copy for deletion.
+freads = '250'  # Minimum fusion reads > 250 for call.
+
+
+# TODO:  Write source checking. Don't want to use 'oca' for a 'tso500' VCF.
 
 
 def get_args():
@@ -98,13 +107,13 @@ def get_args():
     parser.add_argument(
         '--cu',
         metavar='INT <5% CI>',
-        default='4',
+        default=camp,
         help='Threshold for calling amplifications. Default: %(default)s.'
     )
     parser.add_argument(
         '--cl', 
         metavar='INT <95% CI>',
-        default='1',
+        default=closs,
         help='Threshold for calling deletions. Default: %(default)s.'
     )
     parser.add_argument(
@@ -115,7 +124,7 @@ def get_args():
     parser.add_argument(
         '--reads',
         metavar='INT <reads>',
-        default='250',
+        default=freads, 
         help='Threshold for reporting fusions. Default: %(default)s.'
     )
     parser.add_argument(
@@ -128,9 +137,9 @@ def get_args():
         '-p', '--popfreq',
         metavar='<pop_frequency>',
         type=float,
-        default='0.01',
+        default=pfreq,
         help='Population frequency threshold above which variants will be '
-            'filtered out.'
+        'filtered out. Default: %(default)s.'
     )
     parser.add_argument(
         '-q', '--quiet',
@@ -235,6 +244,9 @@ def generate_report(annovar_data, genes, outfile):
     population frequency, and any other filter. Use `wanted_fields` to order the
     output.
     """
+    #  utils.pp(annovar_data)
+    #  sys.exit()
+
     with open(outfile, 'w') as outfh:
         csv_writer = csv.writer(outfh, lineterminator="\n", delimiter=",")
         #  wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
@@ -272,7 +284,7 @@ def generate_report(annovar_data, genes, outfile):
             except:
                 print("ERROR with entry:")
                 utils.pp(var)
-                sys.exit()
+                raise
 
 def run(cmd, task, ret_data=False, silent=True):
     """
@@ -340,44 +352,62 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
 
         for line in annovar_fh:
             data = dict(zip(header, line.rstrip('\n').split('\t')))
+            #  utils.pp(data)
+            #  utils.__exit__(sys._getframe().f_lineno, '')
 
             varid = ':'.join(itemgetter(*['Gene', 'Chr', 'Start', 'Ref', 
                 'Alt'])(data))
 
             if varid in final_data:
-                # Work on the VAF data.
-                vaf_data = data['vcf_info'] if source == 'oca' else data['vcf_sample']
-                if vaf_data.startswith('./.'):
+
+                var_data = dict(zip(data['vcf_format'].split(':'),
+                    data['vcf_sample'].split(':')))
+
+                if var_data['GT'] == './.':
                     logger.write_log('note', 'Removing entry for {} because it '
                         'is a NOCALL that should be filtered out.'.format(varid))
                     del final_data[varid]
                     continue
-                elif vaf_data.count(',') > 1:
-                    logger.write_log('warn', 'Multiple entries in line for {}. '
-                        'Need to split apart.'.format(varid))
+
+                # Some of the WES data can have random multi-allele entries,
+                # which I think we don't want to contend with at the moment
+                # untile we know better the how and why. Also sometimes for some
+                # reason there is no AD field in the VCF; just toss these
+                # entries out. 
+                try:
+                    if var_data['AD'].count(',') > 1:
+                        logger.write_log('warn', 'Multiple entries in line for {}. '
+                            'Need to split apart.'.format(varid))
+                        del final_data[varid]
+                        continue
+                except KeyError:
+                    logger.write_log('warn', 'No AD field for this entry. Can '
+                        'not process this entry. Skipping.')
                     del final_data[varid]
                     continue
+
                 try:
-                    vaf = __get_vaf(varid, vaf_data, source)
+                    ref_reads, alt_reads = var_data['AD'].split(',')
+                    vaf = '{:.4f}'.format(float(alt_reads) / (float(ref_reads) +
+                        float(alt_reads)) * 100.00)
                 except:
                     utils.__exit__(msg='Issue getting VAF for {}; vaf_str: '
-                        '{}'.format(varid, vaf_data), color='red')
+                        '{}'.format(varid, var_data), color='red')
 
-                # Depending on the VCF, can get sub 1% VAF variants even if not
-                # running a ctDNA assay. Want those filtered out.
                 if source != 'tso500' and float(vaf) < 1:
                     logger.write_log('note', 'Removing variant {} because VAF '
                         'is <1% and this is not ctDNA assay data.'.format(varid))
                     del final_data[varid]
                     continue
 
-                cov_info = data['vcf_sample'].split(':')[1]
-                if ',' not in cov_info: continue
-                try:
-                    ref_reads, alt_reads = cov_info.split(',')
-                except:
-                    utils.pp(data['vcf_sample'])
-                    sys.exit(1)
+                # Run the Routbort Rule; Filter out any variants with alt reads
+                # < 25.
+                if source != 'tso500' and float(alt_reads) < 25:
+                    logger.write_log('note', 'Removing variant {} because Alt '
+                        'reads are less than 25 (alt reads: {}).'.format(
+                            varid, alt_reads))
+                    del final_data[varid]
+                    continue
 
                 new = {
                     'sift'        : __translate(data['SIFT_pred']),
@@ -394,6 +424,8 @@ def __marry_oncokb_data(annovar_file, annotated_maf, source):
                     'gnomad_mean' : __get_avg_pop(data, 'GnomAD')
                 }
                 final_data[varid].update(new)
+    #  utils.pp(final_data)
+    #  utils.__exit__(432,'')
     return dict(final_data)
 
 def __get_avg_pop(annovar_data, population):
@@ -436,7 +468,10 @@ def __get_vaf(varid, vafstr, source):
     elif source == 'wes': 
         return '{:.2f}'.format(float(vafstr.split(':')[2]) * 100.00)
     elif source == 'tso500':
-        return '{:.4f}'.format(float(vafstr.split(':')[4]) * 100.00)
+        #  return '{:.4f}'.format(float(vafstr.split(':')[4]) * 100.00)
+        ref_reads, alt_reads = vafstr['AD'].split(',')
+        return '{:.4f}'.format(float(alt_reads) / (float(ref_reads) +
+            float(alt_reads)) * 100.00)
 
 def oncokb_annotate(annovar_file, source, popfreq):
     """
@@ -684,6 +719,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         if not os.path.exists(outdir_path):
             os.mkdir(os.path.abspath(outdir_path), 0o755)
 
+        # TODO:  Write source checking. Don't want to use 'oca' for a 'tso500' VCF.
         # Simplify the VCF
         if data_source == 'oca':
             logger.write_log('info', 'Simplifying the VCF file.')
@@ -704,11 +740,6 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     logger.write_log('info', 'Running OncoKB Filter rules on data to look for '
             'oncogenic variants.')
     oncokb_annotated_data = oncokb_annotate(annovar_file, data_source, popfreq) 
-
-    # XXX
-    #  utils.pp(oncokb_annotated_data)
-    #  utils.__exit__()
-
 
     # Generate a filtered CSV file of results for the report.
     mutation_report = os.path.join(outdir_path, 
