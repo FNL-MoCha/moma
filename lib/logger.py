@@ -10,23 +10,34 @@ class Logger(object):
     def __init__(self, loglevel='debug', colored_output=False, dest=None, 
             quiet=True):
         """
-        Basic Logger class for the AMG-232 package.  This logger will take in
-        the loglevel and destination for logging, and set up a system to write
-        messages to a logfile (or STDERR if no destination indicated.
-        Valid log levels are, from lowest to highest, `debug`, `warning`,
-        `error`, `info`.  We will output anything on a lower tier than the log
-        level entered.
+        Basic Logger class for the MOMA package.
+        This logger will take in the loglevel and destination for logging, and
+        set up a system to write messages to a logfile (or STDERR if no
+        destination indicated.
 
+        Args:
+            loglevel (str): Maximum level to which log messages should be
+                            written. Valid log levels are, from lowest to 
+                            highest: `debug`, `warning`, `error`, `info`. We
+                            will output anything on a lower tier than the log
+                            level entered.
+            colored_output (bool): Output log messages in color or in black and 
+                            white.
+            dest (str):    Log file to which the data should be written. If not
+                           set, the log messages will be written to STDOUT.
+            quiet (bool):  If set to true, do not output anything to stdout;
+                           only output to file.
         """
-        info_tag = colored("INFO", 'green', 
+
+        info_tag = colored(" INFO ", 'green', 
                 attrs=['bold']) if colored_output else "INFO"
-        warn_tag = colored("WARN", 'yellow', 
+        warn_tag = colored(" WARN ", 'yellow', 
                 attrs=['bold']) if colored_output else "WARN"
-        error_tag = colored("ERROR", 'red', 
+        error_tag = colored(" ERROR ", 'red', 
                 attrs=['bold']) if colored_output else "ERROR"
-        debug_tag = colored("DEBUG", 'cyan', 
+        debug_tag = colored(" DEBUG ", 'cyan', 
                 attrs=['bold']) if colored_output else "DEBUG"
-        note_tag = colored("NOTE", 'magenta', 
+        note_tag = colored(" NOTE ", 'magenta', 
                 attrs=['bold']) if colored_output else "NOTE"
 
         self.colored_output = colored_output
@@ -75,7 +86,7 @@ class Logger(object):
             logtype (str): Type of log message to be considered for printing.
                            Can be any one of the legitimate levels, such as
                            'info', 'warn', 'error', or 'debug'. If a blank
-                           string is pass, then print a '\t' char followed by
+                           string is pass, then print a '\\t' char followed by
                            the message; intended as a continuation of the
                            previous.
             message (str): Message to be printed.
@@ -101,16 +112,16 @@ class Logger(object):
                 
                 if level is not None and level <= self.log_level:
                     if self.colored_output:
-                         outstr = '{:33} {}{:^22}{}:  {}\n'.format(
-                                colored(self.__get_time(), 'white', attrs=['bold']),
-                                colored('[', 'white', attrs=['bold']),
-                                tag,
-                                colored(']', 'white', attrs=['bold']),
-                                message
+                        label = (colored('[', 'white', attrs=['bold']) + tag
+                            + colored(']', 'white', attrs=['bold']) + ':')
+                        outstr = '{:33} {:<49}  {:<40}\n'.format(
+                            colored(self.__get_time(), 'white', attrs=['bold']),
+                            label,
+                            message
                          )
                     else:
                         outstr = '{:20} {}{:^8}{}:  {}\n'.format(
-                                self.__get_time(), '[', tag, ']', message
+                            self.__get_time(), '[', tag, ']', message
                         )
                     self.outfh.write(outstr)
                     self.outfh.flush()
