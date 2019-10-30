@@ -29,7 +29,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils
 
-version = '0.15.20191018-dev'
+version = '0.17.20191030-dev'
 
 
 # Globals
@@ -62,7 +62,6 @@ freads = '250'  # Minimum fusion reads > 250 for call.
 
 # TODO:  Write source checking. Don't want to use 'oca' for a 'tso500' VCF.
 
-
 def get_args():
     global verbose
 
@@ -73,20 +72,67 @@ def get_args():
         help='VCF file on which to run the analysis. VCF files must be derived '
             'from the Ion Torrent TVC plugin.'
     )
-    parser.add_argument(
+
+    # Mandatory args
+    required_args = parser.add_argument_group('Required Arguments')
+    required_args.add_argument(
         '-s', '--source',
         required=True,
         choices=['oca', 'wes', 'tso500', 'genmaf'],
         help='Type of data being loaded. Will determine what steps and script '
             'are necessary to process these data.'
     )
-    parser.add_argument(
+
+    # Arguments used for filtering data
+    filter_args = parser.add_argument_group('Filtering Arguments')
+    filter_args.add_argument(
         '-g', '--genes', 
         metavar="<gene>", 
         default="all",
         help='Gene or comma separated list of genes to report. Use the string '
         '"all" to remove the gene filter and report data for all genes. DEFAULT: '
             '%(default)s.'
+    )
+
+    filter_args.add_argument(
+        '--cu',
+        metavar='INT <5% CI>',
+        default=camp,
+        help='Threshold for calling amplifications. Only valid with the `-CNV` '
+            'option selected. Default: %(default)s.'
+    )
+    filter_args.add_argument(
+        '--cl', 
+        metavar='INT <95% CI>',
+        default=closs,
+        help='Threshold for calling deletions. Only valid with the `-CNV` '
+            'option selected. Default: %(default)s.'
+    )
+    filter_args.add_argument(
+        '--reads',
+        metavar='INT <reads>',
+        default=freads, 
+        help='Threshold for reporting fusions. Only valid with the `-Fusion` '
+            'option selected. Default: %(default)s.'
+    )
+    filter_args.add_argument(
+        '-p', '--popfreq',
+        metavar='<pop_frequency>',
+        type=float,
+        default=pfreq,
+        help='Population frequency threshold above which variants will be '
+        'filtered out. Default: %(default)s.'
+    )
+
+    parser.add_argument(
+        '-C', '--CNV',
+        action='store_true',
+        help='Add CNV data to the output. CNV reporting is off by default.'
+    )
+    parser.add_argument(
+        '-F', '--Fusion',
+        action='store_true',
+        help='Add Fusion data to the output. Fusion reporting is off by default.'
     )
     parser.add_argument(
         '-n', '--name', 
@@ -100,46 +146,10 @@ def get_args():
             '<sample_name>_out/'
     )
     parser.add_argument(
-        '-C', '--CNV',
-        action='store_true',
-        help='Add CNV data to the output. CNV reporting is off by default.'
-    )
-    parser.add_argument(
-        '--cu',
-        metavar='INT <5% CI>',
-        default=camp,
-        help='Threshold for calling amplifications. Default: %(default)s.'
-    )
-    parser.add_argument(
-        '--cl', 
-        metavar='INT <95% CI>',
-        default=closs,
-        help='Threshold for calling deletions. Default: %(default)s.'
-    )
-    parser.add_argument(
-        '-F', '--Fusion',
-        action='store_true',
-        help='Add Fusion data to the output. Fusion reporting is off by default.'
-    )
-    parser.add_argument(
-        '--reads',
-        metavar='INT <reads>',
-        default=freads, 
-        help='Threshold for reporting fusions. Default: %(default)s.'
-    )
-    parser.add_argument(
         '-k', '--keep',
         action='store_true',
         help='Keep all intermediate files and do not delete. Useful for '
             'troubleshooting.'
-    )
-    parser.add_argument(
-        '-p', '--popfreq',
-        metavar='<pop_frequency>',
-        type=float,
-        default=pfreq,
-        help='Population frequency threshold above which variants will be '
-        'filtered out. Default: %(default)s.'
     )
     parser.add_argument(
         '-q', '--quiet',
@@ -152,7 +162,19 @@ def get_args():
         action='store_true',
         help='Output more log messages and general stderr messages.'
     )
+    parser.add_argument(
+        '-r', '--rave',
+        metavar='<protocol;treatment_id;specimen_id>',
+        help='Generate a CSV file that can be uploaded into Rave Web Reporting '
+            'to support a clinical trial.'
+    )
+    parser.add_argument(
+        '-v', '--version', 
+        action='version',
+        version='%(prog)s - v' + version
+    )
     '''
+    NOTE:
     Undocumented arg to help with testing and debugging. This will skip the
     Annovar step so that you can focus on just processing the data. Instead
     of supplying a VCF and running Annovar, you merely need to submit the
@@ -162,11 +184,6 @@ def get_args():
         '--noanno',
         action='store_true',
         help=argparse.SUPPRESS
-    )
-    parser.add_argument(
-        '-v', '--version', 
-        action='version',
-        version='%(prog)s - v' + version
     )
     args = parser.parse_args()
 
@@ -249,19 +266,6 @@ def generate_report(annovar_data, genes, outfile):
 
     with open(outfile, 'w') as outfh:
         csv_writer = csv.writer(outfh, lineterminator="\n", delimiter=",")
-        #  wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
-            #  'Tumor_Seq_Allele2', 'vaf', 'ref_reads', 'alt_reads', 'avsnp142', 
-            #  'cosid', 'Hugo_Symbol', 'Transcript_ID', 'HGVSc', 'HGVSp_Short', 
-            #  'Exon_Number', 'Variant_Classification', 'sift', 'polyphen', 
-            #  'CLNSIG', 'CLNREVSTAT', '1000g_mean', 'exac_mean', 'gnomad_mean',
-            #  'MOI_Type', 'Oncogenicity', 'Effect')
-            
-
-        #  csv_writer.writerow(('Chr', 'Pos', 'Ref', 'Alt', 'VAF', 'Ref_Reads',
-            #  'Alt_Reads', 'dbSNP_Id', 'COSMIC_Id', 'Gene', 'Transcript', 'CDS',
-            #  'AA', 'Location', 'Function', 'Sift', 'Polyphen', 
-            #  'Clinvar_Significance', 'Clinvar_Review_Status', '1000G_Mean', 
-            #  'ExAC_Mean', 'GnomAD_Mean', 'MOI_Type', 'Oncogenicity', 'Effect'))
 
         wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
             'Tumor_Seq_Allele2', 'vaf', 'ref_reads', 'alt_reads', 'avsnp142', 
@@ -312,6 +316,7 @@ def run(cmd, task, ret_data=False, silent=True):
     if proc.returncode != 0:
         logger.write_log('error', 'An error has occurred while trying to %s' %
                 task)
+        #  logger.write_log('unformatted', '\n'.join(proc.stdout))
         raise subprocess.CalledProcessError(proc.returncode, ' '.join(proc.args))
     return data
 
@@ -656,7 +661,8 @@ def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
 
     logger.write_log('info', 'Collating all variant data into a single report')
 
-    with open(os.path.join(path, final_report_name), "w") as outfh:
+    report_path = os.path.join(path, final_report_name)
+    with open(report_path, "w") as outfh:
         outfh.write(f':::  SNV / Indel Report for {sample_name}  :::\n')
         var_data = __read_report(mut_report)
         if len(var_data) == 1:
@@ -675,47 +681,69 @@ def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
             outfh.write('\n'.join(var_data))
         outfh.write('\n')
 
+    return report_path
+
+def run_moma2rave(moma_report, path, rave_args):
+    """
+    Generate a CSV file that can be uploaded into Rave.
+    """
+    pnum, tpid, spid = rave_args.split(';')
+    
+    msg = ('\tProtocol Number:      {}\n\tTreatment Patient ID: {}\n\tSpecimen '
+        'ID:          {}\n'.format(pnum, tpid, spid))
+    logger.write_log('unformatted', msg)
+
+    outfile = os.path.join(path, moma_report.replace('moi_report', 'rave_report'))
+    cmd = [os.path.join(scripts_dir, 'moma2rave.py'), '-p', pnum, '-t', 
+            tpid, '-s', spid, '-o', outfile, moma_report]
+    status = run(cmd, 'Generate a Rave compatible CSV file', silent=not verbose)
+    if status:
+        sys.exit(1)
+
 def __read_report(report):
     with open(report) as fh:
         return [line.rstrip('\n') for line in fh]
 
 def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
-        get_fusions, reads, outdir, keep_intermediate_files, noanno):
+        get_fusions, reads, outdir, keep_intermediate_files, noanno, 
+        rave_report):
 
     global outdir_path, debug, verbose
 
-    if debug:
-        sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}',
-            '\u001b[0m\n\n'.format(decor='='*25))
+    # Write out welcome and header
+    pipeline_version = ''
+    with open(os.path.join(package_root, '_version.py')) as fh:
+        pipeline_version = fh.readline().rstrip("'\n'").split("'")[1]
+    welcome_str = ('{0}\n:::::  Running the MoCha Oncogenic Mutation Annotator '
+        '(MOMA) pipeline - v{1}  :::::\n{0}\n'.format('='*97, 
+            pipeline_version))
+    logger.write_log('header', welcome_str)
 
-    if not noanno:
-        pipeline_version = ''
-        with open(os.path.join(package_root, '_version.py')) as fh:
-            pipeline_version = fh.readline().rstrip("'\n'").split("'")[1]
-        welcome_str = ('{0}\n:::::  Running the MoCha Oncogenic Mutation Annotator '
-            '(MOMA) pipeline - v{1}  :::::\n{0}\n'.format('='*97, 
-                pipeline_version))
-        logger.write_log('header', welcome_str)
+    if debug or noanno:
+        logger.write_log('unformatted', '\n\u001b[33m{decor}  TEST VERSION!  {decor}'
+            '\u001b[0m\n\n'.format(decor='='*25))
 
     # Create an output directory based on the sample_name
     if sample_name is None:
         sample_name = get_name_from_vcf(vcf)
     logger.write_log('info', f'Processing sample: {sample_name}')
         
-    if outdir is None:
-        outdir_path = os.path.join(outdir_path, '%s_out' % sample_name)
-    else:
-        outdir_path = os.path.join(outdir_path, outdir)
-    logger.write_log('debug', 
-            f'Selected destination dir for data is: {outdir_path}')
-
     if noanno:
-        sys.stderr.write('\n\u001b[33m{decor}  TEST VERSION!  {decor}'
-            '\u001b[0m\n'.format(decor='='*35))
-        sys.stderr.write('\u001b[33m\t\t===>  Running without Annovar annotation'
-                '  <===\u001b[0m\n\n')
+        logger.write_log('unformatted', 
+            '\u001b[33m\t\t===>  Running without Annovar annotation  <===\u001b[0m\n\n')
         annovar_file = vcf
+        outdir_path = os.getcwd()
+
+        logger.write_log('debug', 
+                f'Selected destination dir for data is: {outdir_path}')
     else:
+        if outdir is None:
+            outdir_path = os.path.join(outdir_path, '%s_out' % sample_name)
+        else:
+            outdir_path = os.path.join(outdir_path, outdir)
+        logger.write_log('debug', 
+                f'Selected destination dir for data is: {outdir_path}')
+
         if not os.path.exists(outdir_path):
             os.mkdir(os.path.abspath(outdir_path), 0o755)
 
@@ -771,8 +799,14 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         logger.write_log('info', "Done with Fusions report.")
 
     # Combine the three reports into one master report.
-    combine_reports(sample_name, mutation_report, cnv_report, fusion_report, 
-            outdir_path)
+    moma_report = combine_reports(sample_name, mutation_report, cnv_report, 
+            fusion_report, outdir_path)
+
+    # If we need a Rave report, generate one now.
+    if rave_report:
+        logger.write_log('info', 'Generating a CSV file that can be uploaded '
+                'into Theradex Rave.')
+        run_moma2rave(moma_report, outdir_path, rave_report)
 
     # Clean up and move the logfile to data dir.
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
@@ -808,4 +842,4 @@ if __name__ == '__main__':
 
     main(args.vcf, args.source, args.name, genelist, args.popfreq, args.CNV, 
             args.cu, args.cl, args.Fusion, args.reads, args.outdir, args.keep,
-            args.noanno)
+            args.noanno, args.rave)
