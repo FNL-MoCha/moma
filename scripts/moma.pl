@@ -211,7 +211,7 @@ if ($annot_method eq 'hs_bed') {
 
 # Load up Non-Hotspot Rules module along with the TSGs for the non-hs rules
 # engine.
-my $nhs_rules = NonHotspotRules->new($nhs_rules_json, $tsg_file);
+my $nhs_rules = NonHotspotRules->new($nhs_rules_json, $tsg_file, {quiet => 1});
 $logger->info("Using TSG file " . $nhs_rules->{'tsg_version'} . "\n");
 
 # Set up population frequency filter.
