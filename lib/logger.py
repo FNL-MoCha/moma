@@ -101,7 +101,7 @@ class Logger(object):
 
         """
         if logtype:
-            if logtype == 'header':
+            if logtype == 'header' or logtype == 'unformatted':
                 self.outfh.write(f'{message}\n')
                 self.outfh.flush()
                 if self.quiet is False:
