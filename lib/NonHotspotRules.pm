@@ -14,30 +14,43 @@ use JSON;
 use Data::Dump;
 use File::Basename;
 
-our $VERSION='0.7.092419';
+our $VERSION='0.8.102119';
 
 sub new {
-    my ($class, $rule_set, $tsg_file) = @_;
+    my ($class, $rule_set, $tsg_file, $args) = @_;
+
+    # Validate any additionally passed args. 
+    my @valid_args = qw(quiet);
+    for my $arg (keys %$args) {
+        unless (grep { $arg eq $_ } @valid_args) {
+            warn "WARN: '$arg' is not a valid arg. Ignoring.\n";
+            delete($args->{$arg});
+        }
+    }
 
     # Set defaults if one is not passed.
     my $__default_rules = dirname(__FILE__) . "/../resource/non-hotspot_rules.json";
     my $__default_tsgs  = dirname(__FILE__) . "/../resource/gene_reference.csv";
-
     if (! defined $rule_set) {
         warn "WARN: Using default Non-Hotspot Rules JSON: " . 
-            basename($__default_rules) . "\n";
+            basename($__default_rules) . "\n" unless $args->{quiet};
         $rule_set = $__default_rules;
     }
     if (! defined $tsg_file) {
-        warn "WARN: Using default TSGs File: " . basename($__default_tsgs) . "\n";
+        warn "WARN: Using default TSGs File: " . 
+            basename($__default_tsgs) . "\n" unless $args->{quiet};
         $tsg_file = $__default_tsgs;
     }
 
-    my $self = {};
+    my $self = {
+        rule_set => $rule_set,
+        tsg_file => $tsg_file,
+        quiet    => $args->{quiet} || 0,
+    };
     bless $self, $class;
 
-    $self->__load_rules($rule_set);
-    $self->__load_tsgs($tsg_file);
+    $self->__load_rules($self->{rule_set});
+    $self->__load_tsgs($self->{tsg_file});
 
     return $self;
 }
@@ -65,7 +78,8 @@ sub check_variant {
     # report the category, oncogenicity, and effect of the variant.
     my ($self, $gene, $aa_start, $aa_end, $function, $exon) = @_;
 
-    my @tsg_funcs = qw(nonsense stop frameshift splice);
+    # my @tsg_funcs = qw(nonsense stop frameshift splice frame_shift);
+    my @tsg_funcs = qw(nonsense stop frameshift splice frame_shift);
     my ($category, $oncogenicity, $effect) = ('.', '.', '.');
 
     my $tsg_flag = 1 if ($self->__is_tsg($gene));
