@@ -11,7 +11,7 @@ import argparse
 
 from pprint import pprint as pp # noqa
 
-version = '1.0.102919'
+version = '1.0.103019'
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
@@ -23,19 +23,22 @@ def get_args():
     parser.add_argument(
         '-p', '--protocol_number',
         metavar='<protocol_number>',
-        required=True,
-        help='Protocol number required by RAVE.'
+        default='10231',
+        type=str,
+        help='Protocol number required by Rave. Default: %(default)s.'
     )
     parser.add_argument(
         '-t', '--treatment_id',
         metavar='<treatemnt_patient_ID>',
         required = True,
+        type=str,
         help='Treatment Patient ID that is required for registration into RAVE.'
     )
     parser.add_argument(
         '-s', '--specimen_id',
         metavar='<specimen_id>',
         required=True,
+        type=str,
         help='Specimen ID required by RAVE.'
     )
     parser.add_argument(
@@ -50,7 +53,39 @@ def get_args():
         version = '%(prog)s - v' + version
     )
     args = parser.parse_args()
+
+    # Validate that the input protocol number, treatment patient id, and
+    # specimen id strings appear to be valid based on pattern match.  
+    if args.protocol_number != '10231':
+        sys.stderr.write("ERROR: Protocol number should be `10231` only.\n")
+        sys.exit(1)
+    #  print('')
+
+    #  print('treatment patient id: {} (type: {})'.format(args.treatment_id,
+        #  type(args.treatment_id)))
+    id_type = 'treatment_patient_id'
+    trid_regex = r'^[A-Z]{2}\d{3}-\d{4}'
+    validate_id(trid_regex, args.treatment_id, id_type)
+    #  print('')
+
+    #  print('specimen id:          {} (type: {})'.format(args.specimen_id,
+        #  type(args.specimen_id)))
+    id_type = 'specimen_id'
+    spid_regex = r'^' + args.protocol_number + '-[0-9A-Z]{8}-\d$'
+    validate_id(spid_regex, args.specimen_id, id_type)
+
     return args
+
+def validate_id(regex, string, id_type):
+    """
+    Make sure that the ID string that's been passed in follows the correct
+    format and is likely the correct string (to also check for data entry
+    errors).
+    """
+    #  print(f"regex: {regex}")
+    if not re.fullmatch(regex, string):
+        sys.stderr.write(f"ERROR: `{string}` is not a valid {id_type} string.\n")
+        sys.exit(1)
 
 def read_input(moi_file):
     """
