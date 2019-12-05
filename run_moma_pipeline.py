@@ -29,7 +29,7 @@ from natsort import natsorted
 from lib import logger
 from lib import utils
 
-version = '0.17.20191030-dev'
+version = '1.0.20191204'
 
 
 # Globals
@@ -48,6 +48,7 @@ resources = os.path.join(package_root, 'resource')
 oncokb_cnv_file = os.path.join(resources, 'moma_cnv_lookup.tsv')
 oncokb_fusion_lookup = os.path.join(resources, 'moma_fusion_genes.tsv')
 blacklist_file = os.path.join(resources, 'blacklisted_vars.txt')
+reference = os.path.join(resources, 'hg19.fasta.gz')
 
 # Set up the logger.
 logfile = 'moma_reporter_{}.log'.format(utils.today())
@@ -59,8 +60,6 @@ camp = '4'      # 95% confidence interval >= 4 copies for amplification
 closs = '1'     # 5% confidence interval <= 1 copy for deletion.
 freads = '250'  # Minimum fusion reads > 250 for call.
 
-
-# TODO:  Write source checking. Don't want to use 'oca' for a 'tso500' VCF.
 
 def get_args():
     global verbose
@@ -261,9 +260,6 @@ def generate_report(annovar_data, genes, outfile):
     population frequency, and any other filter. Use `wanted_fields` to order the
     output.
     """
-    #  utils.pp(annovar_data)
-    #  sys.exit()
-
     with open(outfile, 'w') as outfh:
         csv_writer = csv.writer(outfh, lineterminator="\n", delimiter=",")
 
@@ -467,16 +463,30 @@ def __translate(string):
     return sp_conversion.get(string, '???')
 
 def __get_vaf(varid, vafstr, source):
-    #print(f'vaf string to proc: {vafstr}')
     if source == 'oca':
         return vafstr.split(';')[0].split('=')[1]
     elif source == 'wes': 
         return '{:.2f}'.format(float(vafstr.split(':')[2]) * 100.00)
     elif source == 'tso500':
-        #  return '{:.4f}'.format(float(vafstr.split(':')[4]) * 100.00)
         ref_reads, alt_reads = vafstr['AD'].split(',')
         return '{:.4f}'.format(float(alt_reads) / (float(ref_reads) +
             float(alt_reads)) * 100.00)
+
+def run_var_sig(vcf, source, outfile):
+    """
+    Run the `calculate_deamination_score.pl` script to get some mutational
+    signature data, along with Ts/Tv ratio and Deamination Score (C>T at other
+    sites compared to C>T at CpG sites).
+    """
+    platform_map = {'oca' : 'ion', 'tso500' : 'illumina', 'wes' : 'illumina'}
+    cmd = [os.path.join(scripts_dir, 'get_sbs_metrics.py'), '-s',
+        platform_map[source], '-r', reference, '-o', outfile, vcf]
+    status = run(cmd, 'Calculating Ts/Tv ratio, deamination score, and '
+        'generating SBS-6 data.', ret_data=True, silent=not verbose)
+    #  utils.pp(status)
+    logger.write_log('info', "Results from SBS script:")
+    for i in status[2:]:
+        logger.write_log(None, i)
 
 def oncokb_annotate(annovar_file, source, popfreq):
     """
@@ -590,7 +600,6 @@ def __oncokb_cnv_and_fusion_annotate(data, lookup_file, datatype):
             elems = line.rstrip('\n').split('\t')
             okb_lookup[elems[0]] = elems[1:]
 
-    #  okb_annot = {} 
     for d in data:
         gene = d['Gene'] if datatype == 'cnv' else d['Driver_Gene']
         if gene in okb_lookup and d['var_type'] == okb_lookup[gene][0]:
@@ -656,7 +665,7 @@ def gen_fusion_report(vcf, reads, genelist, filename):
             outfh.write("No Fusions found.\n")
 
 def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
-    final_report_name = '{}_moi_report_{}.csv'.format(sample_name,
+    final_report_name = '{}_moma_report_{}.csv'.format(sample_name,
             utils.today())
 
     logger.write_log('info', 'Collating all variant data into a single report')
@@ -704,6 +713,28 @@ def __read_report(report):
     with open(report) as fh:
         return [line.rstrip('\n') for line in fh]
 
+def __verify_vcf(vcf, source):
+    '''
+    Make sure that the VCF loaded matches the source string so that we can make
+    sure that we're parsing it correctly.
+
+    oca: ##source="tvc 5.12-11 (35c9114f) - Torrent Variant Caller"
+    tso500: ##source=Pisces 5.2.11.62
+    wes: ##source=Platypus_Version_0.7.9.5
+    wes: ##joinAdjacentSNPs # Rajesh reommends this approach.
+
+    '''
+    id_strings = {
+        'oca'    : '##source="tvc',
+        'tso500' : '##source=Pisces',
+        'wes'    : '##joinAdjacentSNPs'
+    }
+    with open(vcf) as fh:
+        header = [line for line in fh if line.startswith('#')]
+    if any(id_strings[source] in x for x in (header)):
+        return True
+    return False
+
 def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
         get_fusions, reads, outdir, keep_intermediate_files, noanno, 
         rave_report):
@@ -718,6 +749,14 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         '(MOMA) pipeline - v{1}  :::::\n{0}\n'.format('='*97, 
             pipeline_version))
     logger.write_log('header', welcome_str)
+
+    # Verify the VCF source is correct for the VCF that we've loaded.
+    if not __verify_vcf(vcf, data_source):
+        logger.write_log('error', f'ERROR: The VCF source {data_source} does '
+                'not match the type of VCF input.')
+        logger.write_log(None, 'Check the source\nis correct for this kind of '
+            'VCF file.')
+        sys.exit(1)
 
     if debug or noanno:
         logger.write_log('unformatted', '\n\u001b[33m{decor}  TEST VERSION!  {decor}'
@@ -747,7 +786,6 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         if not os.path.exists(outdir_path):
             os.mkdir(os.path.abspath(outdir_path), 0o755)
 
-        # TODO:  Write source checking. Don't want to use 'oca' for a 'tso500' VCF.
         # Simplify the VCF
         if data_source == 'oca':
             logger.write_log('info', 'Simplifying the VCF file.')
@@ -758,6 +796,12 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
             logger.write_log('info', 'VCF already ready for processing with '
                 'Annovar.')
             simple_vcf = vcf
+
+        # Run Mutational Signature QC to determine Ts/Tv and deamination score.
+        logger.write_log('info', 'Generating Ts/Tv, Deamination Score, and '
+            'SBS-6 information for sample.')
+        outfile = f'{outdir_path}/{sample_name}_sbs_metrics.csv'
+        run_var_sig(vcf, data_source, outfile)
 
         # Annotate the vcf with ANNOVAR.
         logger.write_log('info', 'Annotating the simplified VCF file with '
