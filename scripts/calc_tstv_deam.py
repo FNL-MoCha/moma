@@ -362,10 +362,19 @@ def main(vcfs, source, numprocs, quiet, reference, outfile):
     print_results(base_data, outfile)
 
 if __name__ == '__main__':
+    for x in ('samtools', 'vcfExtractor.pl'):
+        if shutil.which(x) is None:
+            sys.stderr.write(f'ERROR: can not find `{x}` in your path on this '
+                    'system. You must install `{x}` prior to running this '
+                    'script.')
+            sys.exit(1)
+
+    '''
     if any(x is None for x in (shutil.which('samtools'), shutil.which('vcfExtractor.pl'))):
-        sys.stderr.write('ERROR: can not find `samtools` in your path on this '
+        sys.stderr.write(f'ERROR: can not find `{x}` in your path on this '
             'system. You must install samtools prior to running this script.')
         sys.exit(1)
+    '''
 
     contexts = __make_context_hash()
 

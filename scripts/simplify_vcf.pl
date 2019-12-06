@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# Light (very!) version of vcfExtractor just for the AMG-232 plugin. This will 
+# Light (very!) version of vcfExtractor just for the MOMA package. This will 
 # parse out the NOCALLs and reference calls from the VCF, and explode the 
 # multiple calls per line into 1 call per line.
 ################################################################################
@@ -15,7 +15,7 @@ use File::Basename;
 use Time::Piece;
 
 my $scriptname = basename($0);
-my $version = "v1.0.091218";
+my $version = "v2.0.120519";
 
 my $description = <<"EOT";
 Utility to read an Ion Torrent VCF file and remove reference calls, and NOCALLs, 
@@ -25,8 +25,10 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <input_vcf_file>
+    -o, --output    Output data format.  Can either choose 'csv' or 'vcf'. 
+                    Default: 'vcf'.
     -f, --filename  Name to use for the resultant output file. 
-                    Default: <file>_flattened.vcf
+                    Default: <file>_flattened.<vcf|csv>
     -v, --version   Version information
     -h, --help      Print this help information
 EOT
@@ -35,8 +37,10 @@ my $help;
 my $ver_info;
 my $debug_pos;  # undocumented.
 my $out_filename;
+my $output = 'vcf';
 
 GetOptions( 
+    "output|o=s"    => \$output,
     "filename|f=s"  => \$out_filename,
     "debug_pos=s"   => \$debug_pos, #undocumented.
     "version|v"     => \$ver_info,
@@ -79,14 +83,6 @@ if ( scalar( @ARGV ) < 1 ) {
 }
 my $input_vcf = shift;
 
-# Set up output type
-my $outfile;
-($out_filename)
-    ? ($outfile = $out_filename) 
-    : (($outfile = $input_vcf) =~ s/\.vcf/_flattened.vcf/);
-
-open(my $out_fh, ">", $outfile);
-
 #########--------------- END Arg Parsing and validation ---------------#########
 
 # Check VCF file and options to make sure they're valid
@@ -107,8 +103,31 @@ my @extracted_data = qx( vcf-query $input_vcf -f "$vcf_format\n" );
 # Read in the VCF file data and create a hash
 my $vcf_data = parse_data(\@extracted_data);
 
-# Write the data out to a new VCF file.
-make_vcf(\@header, $vcf_data, $out_fh);
+# Write the data out to a new VCF file or CSV.
+if ($output eq 'vcf')  {
+    # If we want a VCF, either choose a custom filename or just use
+    # <vcf>_flattened.vcf.
+    my $outfile;
+    ($out_filename)
+        ? ($outfile = $out_filename) 
+        : (($outfile = $input_vcf) =~ s/\.vcf/_flattened.vcf/);
+    open(my $out_fh, ">", $outfile);
+    make_vcf(\@header, $vcf_data, $out_fh);
+ } else {
+    my $out_fh;
+    if ($out_filename) {
+        if ($out_filename =~ /\.vcf$/) {
+            warn("Output file has a '.vcf' extension even though 'csv' was ",
+                "chosen for `--output`\n");
+        }
+        print "Writing results to '$out_filename'.\n";
+        open($out_fh, ">", $out_filename);
+    } else {
+        $out_fh = \*STDOUT;
+    }
+    make_csv($vcf_data, $out_fh);
+ }
+
 
 sub parse_data {
     # Extract the VCF information and create a hash of the data.  
@@ -136,10 +155,9 @@ sub parse_data {
         
         # Sometimes not getting correct 'NOCALL' flag; manually set if need to.
         $filter = "NOCALL" if (($gtr =~ m|\./\.|) or ($reason eq 'REJECTION'));
+
         # Get rid of reference and NOCALLS.
         next if ($filter eq "NOCALL" or $gtr eq '0/0');
-        # next if ( $nocall && $filter eq "NOCALL" );
-        # next if ( $noref && $gtr eq '0/0' );
 
         # Create some arrays to hold the variant data in case we have MNP calls
         my @alt_array     = split( /,/, $alt );
@@ -290,6 +308,7 @@ sub vaf_calc {
 sub make_vcf {
     # Output data in VCF format instead of a pretty table.
     my ($header, $data, $out_fh) = @_;
+
     my $final_header = __make_header($header);
 
     my @vcf_lines;
@@ -299,6 +318,17 @@ sub make_vcf {
 
     print {$out_fh} $_ for @$final_header;
     print {$out_fh} $_ for @vcf_lines;
+}
+
+sub make_csv {
+    # Output data in CSV format.
+    my ($data, $out_fh) = @_;
+    my @header = qw(CHROM:POS REF ALT VAF TotCov RefCov AltCov VarID);
+    print {$out_fh} join(',', @header), "\n";
+
+    for (sort {versioncmp($a, $b)} keys %$data) {
+        print {$out_fh} join(',', @{$$data{$_}}[0,1,2,5,6,7,8,9]), "\n";
+    }
 }
 
 sub print_debug_output {
