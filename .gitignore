@@ -14,4 +14,4 @@ resource/lookup_file_workshop
 resource/old_versions
 make_package.sh
 TODO
-
+hg19*
