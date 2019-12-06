@@ -24,13 +24,11 @@ from pprint import pformat # noqa
 from textwrap import indent # noqa
 from operator import itemgetter
 from collections import defaultdict
-from natsort import natsorted
 
 from lib import logger
 from lib import utils
 
 version = '1.0.20191204'
-
 
 # Globals
 verbose = False
@@ -43,6 +41,11 @@ package_root = os.path.dirname(__file__)
 scripts_dir = os.path.join(package_root, 'scripts')
 lib = os.path.join(package_root, 'lib')
 resources = os.path.join(package_root, 'resource')
+
+# Want to sort the results and need a natural sort algorithm. Module natsort is
+# not available by default on some systems, so do a local import.
+sys.path.insert(0, lib)
+from natsort import natsorted
 
 # Default resource files.
 oncokb_cnv_file = os.path.join(resources, 'moma_cnv_lookup.tsv')
@@ -479,11 +482,10 @@ def run_var_sig(vcf, source, outfile):
     sites compared to C>T at CpG sites).
     """
     platform_map = {'oca' : 'ion', 'tso500' : 'illumina', 'wes' : 'illumina'}
-    cmd = [os.path.join(scripts_dir, 'get_sbs_metrics.py'), '-s',
+    cmd = [os.path.join(scripts_dir, 'calc_tstv_deam.py'), '-s',
         platform_map[source], '-r', reference, '-o', outfile, vcf]
     status = run(cmd, 'Calculating Ts/Tv ratio, deamination score, and '
         'generating SBS-6 data.', ret_data=True, silent=not verbose)
-    #  utils.pp(status)
     logger.write_log('info', "Results from SBS script:")
     for i in status[2:]:
         logger.write_log(None, i)
@@ -786,6 +788,12 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         if not os.path.exists(outdir_path):
             os.mkdir(os.path.abspath(outdir_path), 0o755)
 
+        # Run Mutational Signature QC to determine Ts/Tv and deamination score.
+        logger.write_log('info', 'Generating Ts/Tv, Deamination Score, and '
+            'SBS-6 information for sample.')
+        outfile = f'{outdir_path}/{sample_name}_sbs_metrics.csv'
+        run_var_sig(vcf, data_source, outfile)
+
         # Simplify the VCF
         if data_source == 'oca':
             logger.write_log('info', 'Simplifying the VCF file.')
@@ -796,12 +804,6 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
             logger.write_log('info', 'VCF already ready for processing with '
                 'Annovar.')
             simple_vcf = vcf
-
-        # Run Mutational Signature QC to determine Ts/Tv and deamination score.
-        logger.write_log('info', 'Generating Ts/Tv, Deamination Score, and '
-            'SBS-6 information for sample.')
-        outfile = f'{outdir_path}/{sample_name}_sbs_metrics.csv'
-        run_var_sig(vcf, data_source, outfile)
 
         # Annotate the vcf with ANNOVAR.
         logger.write_log('info', 'Annotating the simplified VCF file with '
