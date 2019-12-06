@@ -21,12 +21,18 @@ import sys
 import os
 import re
 import argparse
-import shutil
+#import shutil
 import pysam
 import subprocess
-import natsort
 
 from pprint import pprint as pp # noqa
+
+
+# Need to import the natsort module, which is not commonly installed.  So, point
+# to a local copy of the module.
+lib_path = os.path.join(os.path.dirname(__file__), '../', 'lib')
+sys.path.insert(0, lib_path)
+import natsort
 
 
 version = '1.0.120319'
@@ -128,11 +134,16 @@ def run_ion_parser(vcf):
     sample_name = __get_sample_name(vcf)
     vcf_data = []
 
-    cmd = ["vcfExtractor.pl", "-CNn", vcf]
-    p = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr=subprocess.PIPE)
+    #  cmd = ["vcfExtractor.pl", "-CNn", vcf]
+    cmd = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)),
+            "simplify_vcf.pl"), 
+        "-o", "csv", vcf
+    ]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
-
     data = out.decode('ascii').split('\n')
+
     for d in data:
         elems = d.split(',')
         if elems and elems[0].startswith('chr'):
@@ -362,12 +373,12 @@ def main(vcfs, source, numprocs, quiet, reference, outfile):
     print_results(base_data, outfile)
 
 if __name__ == '__main__':
-    for x in ('samtools', 'vcfExtractor.pl'):
-        if shutil.which(x) is None:
-            sys.stderr.write(f'ERROR: can not find `{x}` in your path on this '
-                    'system. You must install `{x}` prior to running this '
-                    'script.')
-            sys.exit(1)
+    #  for x in ('samtools', 'vcfExtractor.pl'):
+        #  if shutil.which(x) is None:
+            #  sys.stderr.write(f'ERROR: can not find `{x}` in your path on this '
+                    #  'system. You must install `{x}` prior to running this '
+                    #  'script.')
+            #  sys.exit(1)
 
     '''
     if any(x is None for x in (shutil.which('samtools'), shutil.which('vcfExtractor.pl'))):
