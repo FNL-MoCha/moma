@@ -134,7 +134,6 @@ def run_ion_parser(vcf):
     sample_name = __get_sample_name(vcf)
     vcf_data = []
 
-    #  cmd = ["vcfExtractor.pl", "-CNn", vcf]
     cmd = [
         os.path.join(os.path.dirname(os.path.abspath(__file__)),
             "simplify_vcf.pl"), 
@@ -312,7 +311,7 @@ def __get_width(elems):
     colwidth = 0
     for e in elems:
         colwidth = len(e) if len(e) > colwidth else colwidth
-    return colwidth + 4
+    return colwidth + 2
 
 def print_results(data, outfile):
     if outfile:
@@ -327,18 +326,18 @@ def print_results(data, outfile):
         'sample'       : __get_width(data.keys()),
         'tot_vars'     : 9,
         'indels'       : 7,
-        'tstv'         : 7,
-        'C>A'          : 6,
-        'C>G'          : 6,
-        'C>T'          : 6,
-        'T>A'          : 6,
-        'T>C'          : 6,
-        'T>G'          : 6,
-        'C>T_at_CpG'   : 12,
-        'C>T_at_other' : 13,
+        'tstv'         : 6,
+        'C>A'          : 5,
+        'C>G'          : 5,
+        'C>T'          : 5,
+        'T>A'          : 5,
+        'T>C'          : 5,
+        'T>G'          : 5,
+        'C>T_at_CpG'   : 11,
+        'C>T_at_other' : 12,
         'deam_score'   : 20,
     }
-    header = ['Sample', 'Tot_Vars', 'Indels', 'Ts/Tv'] + sbs_order + ['Deamination_Score']
+    header = ['Sample', 'Tot_Vars', 'Indels', 'Ts/Tv'] + sbs_order + ['C>T_Ratio']
 
     fline = ('{:{sp}<{sample}} {:{sp}<{tot_vars}} {:{sp}<{indels}} {:{sp}<{tstv}} '
         '{:{sp}<{C>A}} {:{sp}<{C>G}} {:{sp}<{C>T}} {:{sp}<{T>A}} {:{sp}<{T>C}} '
@@ -347,10 +346,6 @@ def print_results(data, outfile):
 
     outfh.write(fline.format(*header, sp=' ', **field_widths))
 
-    # TODO: I want these data to output in sorted order, but need a natural sort
-    # algorithm.  the natsort module works nicely for this, but it's not part of
-    # the standard modules list, and it's not installed on Biowulf.  So, we'll
-    # need to work around that.  For now, just keep it here.
     for sample in natsort.natsorted(data):
         sbs_data = [data[sample]['sbs_6'][x] for x in sbs_order]
         outdata = [
@@ -373,20 +368,6 @@ def main(vcfs, source, numprocs, quiet, reference, outfile):
     print_results(base_data, outfile)
 
 if __name__ == '__main__':
-    #  for x in ('samtools', 'vcfExtractor.pl'):
-        #  if shutil.which(x) is None:
-            #  sys.stderr.write(f'ERROR: can not find `{x}` in your path on this '
-                    #  'system. You must install `{x}` prior to running this '
-                    #  'script.')
-            #  sys.exit(1)
-
-    '''
-    if any(x is None for x in (shutil.which('samtools'), shutil.which('vcfExtractor.pl'))):
-        sys.stderr.write(f'ERROR: can not find `{x}` in your path on this '
-            'system. You must install samtools prior to running this script.')
-        sys.exit(1)
-    '''
-
     contexts = __make_context_hash()
 
     args = get_args()
