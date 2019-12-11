@@ -66,12 +66,11 @@ def get_args():
     id_type = 'treatment_patient_id'
     trid_regex = r'^[A-Z]{2}\d{3}-\d{4}'
     validate_id(trid_regex, args.treatment_id, id_type)
-    #  print('')
 
-    #  print('specimen id:          {} (type: {})'.format(args.specimen_id,
-        #  type(args.specimen_id)))
-    id_type = 'specimen_id'
-    spid_regex = r'^' + args.protocol_number + '-[0-9A-Z]{8}-\d$'
+    # NOTE: Still not sure the whole scope of this ID. Might be longer than 8
+    # cahrs, and might contain lowercase chars.  
+    #  spid_regex = r'^' + args.protocol_number + '-[0-9A-Z]{8}-\d$'
+    spid_regex = r'^' + args.protocol_number + '-\w+-\d$'
     validate_id(spid_regex, args.specimen_id, id_type)
 
     return args
