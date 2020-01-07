@@ -129,7 +129,8 @@ sub check_variant {
     elsif ($tsg_flag) {
         # Just a plain TSG
         if ($self->check_function($function, \@tsg_funcs)) {
-            return ('Truncating in TSG', 'Oncogenic', 'Loss-of-Function');
+            return ('Truncating in TSG', 'Likely Oncogenic', 
+                'Likely Loss-of-Function');
         }
     }
     return $category, $oncogenicity, $effect;
