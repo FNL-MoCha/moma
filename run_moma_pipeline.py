@@ -166,7 +166,12 @@ def get_args():
         '-r', '--rave',
         metavar='<protocol;treatment_id;specimen_id>',
         help='Generate a CSV file that can be uploaded into Rave Web Reporting '
-            'to support a clinical trial.'
+            'to support a clinical trial. The protocol number should be "10231" '
+            'in general, the treatment ID will be the site identifier (e.g. '
+            '"IA004-0004"), and the specimen ID will be the same as what the '
+            'lab used for sequencing (e.g. "10231-6D4410K1-1"). Since we are '
+            'using semicolons to delimit, the whole string must be enclosed in '
+            'quotes.'
     )
     parser.add_argument(
         '-v', '--version', 
@@ -747,8 +752,11 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     # output, then change this arg.
     log = logger.Logger(loglevel=level, colored_output=True, dest=logfile,
             quiet=quiet)
-    log.write_log('info', 'this is a test')
             
+    # Get some usage stats
+    cmd = [os.path.join(scripts_dir, 'usage.sh')]
+    run(cmd, 'Collect usage information')
+
     if not os.path.exists(vcf):
         log.write_log('error', f'VCF file {vcf} can not be processed! '
                 'No such file or directory!')
