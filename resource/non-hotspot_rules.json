@@ -1,6 +1,6 @@
 {
     "metadata" : {
-        "version" : "1.0.092319",
+        "version" : "1.1.011319",
         "oncokb_version" : "1.20"
     },
     "rules" : {
@@ -73,7 +73,7 @@
                 "exon" : [19],
                 "aa_start" : "",
                 "aa_end" : "",
-                "function" : ["inframe_deletion", "inframe_insertion"],
+                "function" : ["inframe_deletion", "inframe_insertion", "in_frame_del", "in_frame_ins"],
                 "category" : "EGFR In-frame Deletion in Exon 19",
                 "oncogenicity" : "Oncogenic",
                 "effect" : "Gain-of-function"
@@ -82,7 +82,7 @@
                 "exon" : [20],
                 "aa_start" : "",
                 "aa_end" : "",
-                "function" : ["inframe_insertion"],
+                "function" : ["inframe_insertion", "in_frame_ins"],
                 "category" : "EGFR In-frame Insertion in Exon 20",
                 "oncogenicity" : "Oncogenic",
                 "effect" : "Gain-of-function"
@@ -93,7 +93,7 @@
                 "exon" : [20],
                 "aa_start" : "",
                 "aa_end" : "",
-                "function" : ["inframe_insertion", "inframe_deletion"],
+                "function" : ["inframe_insertion", "in_frame_ins", "inframe_deletion", "in_frame_del"],
                 "category" : "ERBB2 In-frame Insertion in Exon 20",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
@@ -104,7 +104,7 @@
                 "exon" : [9, 11, 13, 14, 17],
                 "aa_start" : "",
                 "aa_end" : "",
-                "function" : ["inframe", "missense"],
+                "function" : ["inframe", "missense", "in_frame"],
                 "category" : "KIT Mutations in Exons 9, 11, 13, 14, or 17",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Gain-of-function"
@@ -126,7 +126,7 @@
                 "exon" : [],
                 "aa_start" : ">=256",
                 "aa_end" : "<=286",
-                "function" : ["frameshift", "nonsense", "stop"],
+                "function" : ["frameshift", "nonsense", "stop", "frame_shift"],
                 "category" : "CCND1 Truncating Mutations",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Gain-of-function"
@@ -137,7 +137,7 @@
                 "exon" : [],
                 "aa_start" : ">=286",
                 "aa_end" : "<=292",
-                "function" : ["frameshift", "nonsense", "stop"],
+                "function" : ["frameshift", "frame_shift", "nonsense", "stop"],
                 "category" : "CCND3 Truncating Mutations",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
@@ -148,7 +148,7 @@
                 "exon" : [],
                 "aa_start" : ">=332",
                 "aa_end" : "<=352",
-                "function" : ["frameshift", "nonsense", "stop"],
+                "function" : ["frameshift", "frame_shift", "nonsense", "stop"],
                 "category" : "CXCR4 Truncating Mutations",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
@@ -159,7 +159,7 @@
                 "exon" : [],
                 "aa_start" : ">=422",
                 "aa_end" : "<=605",
-                "function" : ["frameshift", "nonsense", "stop"],
+                "function" : ["frameshift", "frame_shift", "nonsense", "stop"],
                 "category" : "PPM1D Truncating Mutations",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
@@ -181,7 +181,7 @@
                 "exon" : [],
                 "aa_start" : ">=309",
                 "aa_end" : "<=417",
-                "function" : ["frameshift", "nonsense", "stop"],
+                "function" : ["frameshift", "frame_shift", "nonsense", "stop"],
                 "category" : "CALR C-terminal Truncating Mutations",
                 "oncogenicity" : "Likely Oncogenic",
                 "effect" : "Likely Gain-of-function"
