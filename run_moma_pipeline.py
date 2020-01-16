@@ -28,7 +28,7 @@ from collections import defaultdict
 from lib import logger
 from lib import utils
 
-version = '1.0.20191211'
+version = '1.0.20200114'
 
 # Globals
 global verbose, debug, quiet
@@ -875,7 +875,8 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     if not keep_intermediate_files:
         for f in contents:
             if any(f.endswith(x) for x in ('truncmaf', 'avinput', 'oncokb.tsv', 
-                'simple.vcf')):
+                'simple.vcf', 'snv_indel_report.csv', 'cnv_report.csv', 
+                'fusion_report.csv')):
                     log.write_log('debug', f'Removing {f}.')
                     os.remove(f)
 
