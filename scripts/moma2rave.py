@@ -11,7 +11,7 @@ import argparse
 
 from pprint import pprint as pp # noqa
 
-version = '1.0.103019'
+version = '1.1.012420'
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
@@ -174,7 +174,11 @@ def print_data(data, pnum, tid, sid, outfile):
                     var_data.update({'Coverage' : coverage})
                 elif var_type == 'CNV':
                     # If CNV, have to add effect
-                    var_data.update({'Function' : var['Effect']})
+                    if var['Effect'] == 'Gain-of-function':
+                        func = 'Amplification' 
+                    else:
+                        func = 'Copy Loss'
+                    var_data.update({'Function' : func})
 
                 elif var_type == 'Fusion':
                     # If Fusion, need to get the Fusion ID instead of gene, and
@@ -182,7 +186,7 @@ def print_data(data, pnum, tid, sid, outfile):
                     var_data.update({
                         'Gene' : var['Driver_Gene'], 
                         'Variant ID' : '%s.%s' % (var['Fusion'], var['Junction']),
-                        'Function' : var['Effect']
+                        'Function' : 'Fusion'
                     })
                 var_data.update({
                     'Protocol Number' : pnum,
