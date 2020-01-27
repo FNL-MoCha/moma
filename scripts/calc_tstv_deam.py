@@ -4,9 +4,7 @@
 # have a direct Cython implementation of samtools (`pysam`).  This speeds the
 # generation of these data up at least 3x!  The best solution will be to re-code
 # in C directly, but this is a great step along the way.
-# TODO:
-#  - Can we speed this up with parallelization for the context generation?
-#  - 
+#
 # 11/26/2019 - D Sims
 ################################################################################
 """
@@ -21,7 +19,6 @@ import sys
 import os
 import re
 import argparse
-#import shutil
 import pysam
 import subprocess
 
@@ -108,7 +105,8 @@ def run_illumina_parser(vcf):
     # normal is sequenced.
     sample_name = os.path.basename(vcf).split('.')[0]
 
-    tumor_index = 0
+    # By default we should look at array elem 9
+    tumor_index = 9
     with open(vcf) as fh:
         for line in fh:
             if line.startswith('#CHROM'):
@@ -275,8 +273,6 @@ def __get_sample_name(vcf):
                 return line.rstrip('\n').split('\t')[-1]
 
 def __get_vaf(vcf_elems, info_index):
-    if info_index is None:
-        info_index = 9
     vcf_format = dict(zip(vcf_elems[8].split(':'), vcf_elems[info_index].split(':')))
 
     ref_reads, alt_reads = vcf_format['AD'].split(',')
@@ -364,7 +360,6 @@ def main(vcfs, source, numprocs, quiet, reference, outfile):
         base_data = proc_vcfs_parallel(vcfs, source)
     else:
         base_data = proc_vcfs(vcfs, source)
-
     print_results(base_data, outfile)
 
 if __name__ == '__main__':
