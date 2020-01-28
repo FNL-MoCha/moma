@@ -16,3 +16,4 @@ make_package.sh
 TODO
 hg19*
 resource/count.txt
+doc/*
