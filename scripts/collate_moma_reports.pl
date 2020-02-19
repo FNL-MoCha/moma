@@ -15,7 +15,7 @@ use Text::CSV;
 use Sort::Versions;
 use Data::Dump;
 
-my $version = '1.0.012820';
+my $version = '1.1.020220';
 my $scriptname = basename($0);
 my $description = <<"EOT";
 Starting with a set of MOI reports from the MOMA tool, generate a single CSV
@@ -107,10 +107,10 @@ if ($vartype and $vartype ne 'all') {
 ##########----------  End Arg Parsing and Prog Setup  ----------##########
 
 my $wanted = {
-    'snv' => [qw(Ref Alt Gene Transcript Chr Pos CDS AA VAF Ref_Reads
+    'SNV' => [qw(Ref Alt Gene Transcript Chr Pos CDS AA VAF Ref_Reads
         Alt_Reads Function Oncogenicity Effect)],
-    'cnv' => [qw(Gene Chr CN Oncogenicity Effect)],
-    'fusion' => [qw(Driver_Gene Fusion Read_Count Oncogenicity Effect)]
+    'CNV' => [qw(Gene Chr CN Oncogenicity Effect)],
+    'Fusion' => [qw(Driver_Gene Fusion Read_Count Oncogenicity Effect)]
 };
 
 my %data;
@@ -125,7 +125,10 @@ print_results(\%data, $outfile);
  
 sub print_results {
     my ($data, $outfile) = @_;
-    
+
+    # dd $data;
+    # exit;
+
     my $outfh;
     if ($outfile) {
         print "Writing results to $outfile.\n";
@@ -138,16 +141,15 @@ sub print_results {
         for my $type (@vartypes) {
             if (@{$data{$sample}->{$type}} < 1) {
                 print {$outfh} join(',', $sample, $type, "None\n");
-            }
+                next;
+            }  
             for my $var (@{$data{$sample}->{$type}}) {
-                if ($mois_only) {
-                    next unless $var->{'Oncogenicity'} ne '.';
-                }
-                if (@wanted_genes) {
-                    next unless grep { $var->{'Gene'} eq $_ } @wanted_genes;
-                }
-
-                print {$outfh} join(',', $sample, $type, @$var{@{$wanted->{lc $type}}}), "\n";
+                # dd \$var; exit;
+                print {$outfh} join(',', $sample, $type, 
+                    $var->{'HGVS_g'},
+                    $var->{'HGVS_c'},
+                    $var->{'HGVS_p'},
+                    @$var{@{$wanted->{$type}}}), "\n";
             }
         }
         print {$outfh} "\n";
@@ -158,24 +160,30 @@ sub read_report {
     my ($report, $results) = @_;
 
     my %parsed_data;
+    my $data;
 
     local $/ = '';
     open(my $fh, "<", $report);
 
-    my $snv_data = readline($fh);
-    $parsed_data{'SNV'} = parse_block(\$snv_data, 'snv');
+    my @var_type_blocks = <$fh>;
 
-    my $cnv_data = readline($fh);
-    $parsed_data{'CNV'} = parse_block(\$cnv_data, 'cnv');
+    for my $block (@var_type_blocks) {
+        my ($type) = grep { $block =~ /$_/ } @vartypes;
+        next unless $type;
+        $parsed_data{$type} = filter_data(parse_block(\$block, $type));
+    }
 
-    my $fus_data = readline($fh);
-    $parsed_data{'Fusion'} = parse_block(\$fus_data, 'fusion');
-    
+    # Pad out data with empty arrays if we've asked for the output but it
+    # doesn't exist for the sample (e.g. you didn't capture CNV data with MOMA,
+    # but you're asking for it here.
+    for (@vartypes) {
+        $parsed_data{$_} = [] unless exists $parsed_data{$_};
+    }
+
     # dd \%parsed_data;
     # __exit__(__LINE__, "");
     return \%parsed_data;
 }
-
 
 sub parse_block {
     my ($block, $type) = @_;
@@ -201,15 +209,19 @@ sub parse_block {
         @tmp{@{$wanted->{$type}}} = @parsed{@{$wanted->{$type}}};
 
         # Add HGVS data for reporting if we have an SNV variant type.
-        if ($type eq 'snv') {
+        if ($type eq 'SNV') {
             my ($hgvs_g, $hgvs_c, $hgvs_p) = __gen_hgvs(\%tmp);
             @tmp{qw(HGVS_g HGVS_c HGVS_p)} = ($hgvs_g, $hgvs_c, $hgvs_p);
         }
 
-        if ($type eq 'cnv') {
+        if ($type eq 'CNV') {
             ($parsed{'CN'} >= 4)
                 ? ($tmp{'function'} = 'Amplification')
                 : ($tmp{'function'} = 'Copy Loss');
+        }
+
+        if ($type eq 'Fusion') {
+            $tmp{'Gene'} = $tmp{'Driver_Gene'};
         }
 
         push(@ext_data, \%tmp);
@@ -217,6 +229,32 @@ sub parse_block {
     # dd \@ext_data;
     # __exit__(__LINE__, '');
     return \@ext_data;
+}
+
+sub filter_data {
+    # Run a simple filter for gene and oncogenicity (i.e. MOI) if requested.
+    my $input_data = shift;
+    my @filtered_results;
+
+    for my $var (@$input_data) {
+        local $SIG{__WARN__} = sub {
+            my $msg = shift;
+            print "ERROR parsing var for filter. Incoming data:\n";
+            dd $var;
+            print $msg;
+            exit;
+        };
+        if (@wanted_genes) {
+            next unless grep { $var->{'Gene'} eq $_ } @wanted_genes;
+        }
+        if ($mois_only) {
+            next unless $var->{'Oncogenicity'} ne '.';
+        }
+
+        # If we got here, then the variant passed all filters.
+        push(@filtered_results, $var);
+    }
+    return \@filtered_results;
 }
 
 sub __gen_hgvs {
