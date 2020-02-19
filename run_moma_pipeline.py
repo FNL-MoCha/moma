@@ -28,7 +28,7 @@ from collections import defaultdict
 from lib import logger
 from lib import utils
 
-version = '1.0.20200114'
+version = '1.1.20200219'
 
 # Globals
 global verbose, debug, quiet
@@ -56,10 +56,12 @@ blacklist_file = os.path.join(resources, 'blacklisted_vars.txt')
 reference = os.path.join(resources, 'hg19.fasta.gz')
 
 # Default Thresholds
-pfreq = '0.01'  # Max pop frequency < 1%
-camp = '4'      # 95% confidence interval >= 4 copies for amplification
-closs = '1'     # 5% confidence interval <= 1 copy for deletion.
-freads = '250'  # Minimum fusion reads > 250 for call.
+pfreq = '0.01'   # Max pop frequency < 1%
+camp = '4'       # 95% confidence interval >= 4 copies for amplification
+closs = '1'      # 5% confidence interval <= 1 copy for deletion.
+ct_amp = '1.15'  # Fold Change default for TSO500
+ct_loss = '0.85' # Fold change default for TSO500
+freads = '250'   # Minimum fusion reads > 250 for call.
 
 
 def get_args():
@@ -96,15 +98,13 @@ def get_args():
 
     filter_args.add_argument(
         '--cu',
-        metavar='INT <5% CI>',
-        default=camp,
+        metavar='INT <amp threshold>',
         help='Threshold for calling amplifications. Only valid with the `-CNV` '
             'option selected. Default: %(default)s.'
     )
     filter_args.add_argument(
         '--cl', 
-        metavar='INT <95% CI>',
-        default=closs,
+        metavar='INT <loss threshold>',
         help='Threshold for calling deletions. Only valid with the `-CNV` '
             'option selected. Default: %(default)s.'
     )
@@ -198,6 +198,15 @@ def get_args():
     if args.quiet:
         sys.stderr.write("Running in quiet mode.")
         quiet = True
+
+    # If we want CNV data, need to get a different threshold depending on the
+    # assay type.
+    if args.source == 'oca':
+        args.cu = camp if not args.cu else args.cu
+        args.cl = closs if not args.cl else args.cl
+    elif args.source == 'tso500':
+        args.cu = ct_amp if not args.cu else args.cu
+        args.cl = ct_loss if not args.cl else args.cl
 
     return args
 
@@ -530,36 +539,63 @@ def oncokb_annotate(annovar_file, source, popfreq):
         'and running blacklist.')
     return(__marry_oncokb_data(annovar_file, annotated_maf, source))
 
-def gen_cnv_report(vcf, cu, cl, genelist, outfile):
+def gen_cnv_report(cnv_data_file, cu, cl, genelist, outfile, source):
     """
     If required, run an Oncomine CNV report to get that data from the VCF file
     as well.
     """
     cnv_data = []
-    cmd = (os.path.join(scripts_dir, 'get_cnvs.pl'), '--cu', cu, '--cl', cl, vcf)
-    cnv_results = run(cmd, "Generating Oncomine CNV results data", True,
-            silent=not verbose)
-    header = cnv_results.pop(0).rstrip('\n').split(',')
+    parsed_cnv_results = []
+    if source == 'oca':
+        cmd = (os.path.join(scripts_dir, 'get_cnvs.pl'), '--cu', cu, '--cl', cl,
+                cnv_data_file)
+        parsed_cnv_results = run(cmd, "Generating Oncomine CNV results data",
+            True, silent=not verbose)
+    elif source == 'tso500':
+        cmd = (os.path.join(scripts_dir, 'tso500_cnvs.pl'), cnv_data_file)
+        parsed_cnv_results = run(cmd, "Generating TSO500 CNV results data",
+                True, silent=not verbose)
+    elif source == 'wes':
+        logger.write_log('error', 'CNV data acquisition is not yet implemented '
+                'for WES panels yet. Skipping this step.')
+        return None
+
+    header = parsed_cnv_results.pop(0).rstrip('\n').split(',')
 
     # If we have results, then generate a report.  Else, bail out.
-    if cnv_results:
-        for r in cnv_results:
+    if parsed_cnv_results:
+        for r in parsed_cnv_results:
             data = dict(zip(header, r.rstrip('\n').split(',')))
-            cnv_str = '{},{}'.format(data['Gene'], data['Raw_CN'])
-            if float(data['CI_05']) >= float(cu):
+
+            # Fix measurements to accomodate multiple assays.
+            if source == 'oca':
+                cn            = float(data['Raw_CN'])
+                lower_reading = float(data['CI_05'])
+                upper_reading = float(data['CI_95'])
+            elif source == 'tso500':
+                cn = lower_reading = upper_reading = float(data['FoldChange'])
+
+            #  cnv_str = '{},{}'.format(data['Gene'], data['Raw_CN'])
+            cnv_str = '{},{}'.format(data['Gene'], cn) 
+
+            if lower_reading >= float(cu):
                 data.update({'var_type' : 'Amplification'})
-            elif float(data['CI_95']) <= float(cl):
+            elif upper_reading <= float(cl):
                 data.update({'var_type' : 'Deletion'})
 
+            # Remove any genes not in our filter list if there is one.
             if genelist and data['Gene'] not in genelist:
                 log.write_log('debug', 'Filtering out {} because it is not '
                         'in the requested list.'.format(cnv_str))
                 continue
-            if not __cnv_filter(data, cu, cl):
+
+            # Filter events outside of our thresholds.
+            if not __cnv_filter(lower_reading, upper_reading, cu, cl):
                 log.write_log('debug', 'Filtering out {} because it is not '
-                    'an copy number event within the threshold (5% CI={}; '
-                    '95% CI={}).'.format(cnv_str, data['CI_05'], data['CI_95']))
+                    'an copy number event within the threshold (copy loss={}; '
+                    'copy_gain={}).'.format(cnv_str, cl, cu))
                 continue
+
             cnv_data.append(data)
 
     if not cnv_data:
@@ -571,10 +607,19 @@ def gen_cnv_report(vcf, cu, cl, genelist, outfile):
         log.write_log('info', 'Annotating with OncoKB lookup.')
         __oncokb_cnv_and_fusion_annotate(cnv_data, oncokb_cnv_file, 'cnv')
 
+
+    # Set up column headers for different assays.
+    assay_elems = {
+        'oca' : ('Chr', 'Start', 'End', 'Gene', 'CN', 'CI_05', 'CI_95', 'MAPD',
+            'Oncogenicity', 'Effect'),
+        'tso500' : ('Chr', 'Start', 'End', 'Gene', 'FoldChange', 'Oncogenicity',
+            'Effect')
+    }
+
     with open(outfile, 'w') as outfh:
         csv_writer = csv.writer(outfh, lineterminator="\n", delimiter=",")
-        wanted = ('Chr', 'Start', 'End', 'Gene', 'CN', 'CI_05', 'CI_95', 'MAPD',
-                'Oncogenicity', 'Effect')
+        wanted = assay_elems[source]
+
         csv_writer.writerow(wanted)
         if cnv_data:
             for elem in cnv_data:
@@ -583,10 +628,10 @@ def gen_cnv_report(vcf, cu, cl, genelist, outfile):
         else:
             outfh.write("No CNVs found.\n")
 
-def __cnv_filter(data, cu, cl):
-    if float(data['CI_05']) > int(cu):
+def __cnv_filter(lower_reading, upper_reading, cu, cl):
+    if lower_reading > float(cu):
         return True
-    elif float(data['CI_95']) < int(cl):
+    elif upper_reading < float(cl):
         return True
     return False
 
@@ -826,6 +871,8 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
              'Annovar.')
         annovar_file = run_annovar(simple_vcf, sample_name)
 
+    # XXX
+    '''
     # Implement the MOMA here.
     log.write_log('info', 'Running OncoKB Filter rules on data to look for '
             'oncogenic variants.')
@@ -836,18 +883,34 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         f'{sample_name}_mocha_snv_indel_report.csv')
     log.write_log('info', f'Writing report data to {mutation_report}.')
     generate_report(oncokb_annotated_data, genes, mutation_report)
+    '''
 
     # Generate a CNV report if we're asking for one.
     cnv_report = None
     if get_cnvs:
-        log.write_log('info', 'Generating a CNV report for sample {}. Using '
-                'thresholds 5% CI = {}, 95% CI = {}'.format(sample_name, cu,
-                    cl))
+        log.write_log('info', 
+            f"Generating a CNV report for sample '{sample_name}'.\n")
         cnv_report = os.path.join(outdir_path, 
             f'{sample_name}_mocha_cnv_report.csv')
         log.write_log('info', f'Writing report data to {cnv_report}.')
-        gen_cnv_report(vcf, cu, cl, genelist, cnv_report)
+
+        # We need different files depending on the assay.
+        cnv_data_file = ''
+        if data_source == 'oca':
+            cnv_data_file = vcf
+        elif data_source == 'tso500':
+            cnv_data_file = '{}.cnv.fc.txt'.format(vcf.replace('.vcf', ''))
+
+        if not os.path.exists(cnv_data_file):
+            log.write_log('error', 'CNV file {} can not be found.'
+                'Make sure the file is in the same location as the VCF.')
+            sys.exit(1)
+
+        gen_cnv_report(cnv_data_file, cu, cl, genelist, cnv_report, data_source)
         log.write_log('info', 'Done with CNV report.')
+
+    # XXX
+    utils.__exit__(msg='Finished updating CNV algorithm for TSO500.')
 
     # Generate a Fusions report if we've asked for one.
     fusion_report = None
