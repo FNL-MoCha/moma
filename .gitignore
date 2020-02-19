@@ -12,6 +12,7 @@ lib/annovar
 resource/annovar_db
 resource/lookup_file_workshop
 resource/old_versions
+resource/scratch/
 make_package.sh
 TODO
 hg19*
