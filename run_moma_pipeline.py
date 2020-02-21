@@ -62,6 +62,7 @@ closs = '1'      # 5% confidence interval <= 1 copy for deletion.
 ct_amp = '1.15'  # Fold Change default for TSO500
 ct_loss = '0.85' # Fold change default for TSO500
 freads = '250'   # Minimum fusion reads > 250 for call.
+fvaf = '0.05'    # Fusion VAF for TSO500
 
 
 def get_args():
@@ -98,22 +99,33 @@ def get_args():
 
     filter_args.add_argument(
         '--cu',
-        metavar='INT <amp threshold>',
-        help='Threshold for calling amplifications. Only valid with the `-CNV` '
-            'option selected. Default: %(default)s.'
+        metavar='FLOAT <amp threshold>',
+        help='Threshold for calling amplifications. Will be in ploidy space '
+            'for Oncomine data, and fold change for TSO500. Only valid with the '
+            '`-CNV` option selected. Default: %(default)s.'
     )
     filter_args.add_argument(
         '--cl', 
-        metavar='INT <loss threshold>',
-        help='Threshold for calling deletions. Only valid with the `-CNV` '
-            'option selected. Default: %(default)s.'
+        metavar='FLOAT <loss threshold>',
+        help='Threshold for calling deletions. Will be in ploidy space for '
+            'Oncomine data, and fold change for TSO500. Only valid with the '
+            '`-CNV` option selected. Default: %(default)s.'
     )
     filter_args.add_argument(
         '--reads',
         metavar='INT <reads>',
         default=freads, 
-        help='Threshold for reporting fusions. Only valid with the `-Fusion` '
-            'option selected. Default: %(default)s.'
+        help='Threshold for reporting fusions. This filter arg is used for '
+             'Oncomine results only, and is nly valid with the `-Fusion` '
+             'option selected. Default: %(default)s.'
+    )
+    filter_args.add_argument(
+        '--vaf',
+        metavar='FLOAT <fusion allele frequency<',
+        default=fvaf,
+        help='Variant Allele Frequency (VAF) threshold for fusion reads. This '
+            'filter is only applicable to the TSO500 assay, which does not '
+            'report read counts like Oncomine. Default: %(default)s.'
     )
     filter_args.add_argument(
         '-p', '--popfreq',
@@ -204,10 +216,14 @@ def get_args():
     if args.source == 'oca':
         args.cu = camp if not args.cu else args.cu
         args.cl = closs if not args.cl else args.cl
+
     elif args.source == 'tso500':
         args.cu = ct_amp if not args.cu else args.cu
         args.cl = ct_loss if not args.cl else args.cl
 
+    # TODO:
+        # Need to do some more arg checking to make sure we're sanely passing
+        # args
     return args
 
 def get_name_from_vcf(vcf):
@@ -781,7 +797,7 @@ def __verify_vcf(vcf, source):
     return False
 
 def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
-        get_fusions, reads, outdir, keep_intermediate_files, noanno, 
+        get_fusions, fusion_threshold, outdir, keep_intermediate_files, noanno, 
         rave_report):
 
     global outdir_path, debug, verbose, log
@@ -872,7 +888,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         annovar_file = run_annovar(simple_vcf, sample_name)
 
     # XXX
-    '''
+    #  '''
     # Implement the MOMA here.
     log.write_log('info', 'Running OncoKB Filter rules on data to look for '
             'oncogenic variants.')
@@ -883,8 +899,10 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         f'{sample_name}_mocha_snv_indel_report.csv')
     log.write_log('info', f'Writing report data to {mutation_report}.')
     generate_report(oncokb_annotated_data, genes, mutation_report)
-    '''
+    #  '''
 
+    # XXX
+    #  '''
     # Generate a CNV report if we're asking for one.
     cnv_report = None
     if get_cnvs:
@@ -910,28 +928,47 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         log.write_log('info', 'Done with CNV report.')
 
     # XXX
-    utils.__exit__(msg='Finished updating CNV algorithm for TSO500.')
+    #  utils.__exit__(msg='Finished updating CNV algorithm for TSO500.')
+    #  '''
 
     # Generate a Fusions report if we've asked for one.
     fusion_report = None
     if get_fusions:
-        log.write_log('info', 'Generating a Fusions report for sample {}. '
-                'Using threshold of {} reads.'.format(sample_name, reads))
+
+        units = ' reads'
+        if data_source == 'tso500':
+            units = '%'
+
+        log.write_log('info', 'Generating a Fusions report for sample {}. Using '
+            'threshold of {}{}.'.format(sample_name, fusion_threshold, units))
         fusion_report= os.path.join(outdir_path,
             f'{sample_name}_mocha_fusion_report.csv')
-        log.write_log('info', f'Writing report data to {cnv_report}.')
-        gen_fusion_report(vcf, reads, genelist, fusion_report)
+        log.write_log('info', f'Writing report data to {fusion_report}.')
+
+        if data_source == 'oca':
+            fusion_data_file = vcf
+        elif data_source == 'tso500':
+            fusion_data_file = '{}.fusion.txt'.format(vcf.replace('.vcf', ''))
+
+        #XXX: Pick it up here!
+
+        gen_fusion_report(fusion_data_file, fusion_threshold, genelist, fusion_report)
+
         log.write_log('info', "Done with Fusions report.")
 
     # Combine the three reports into one master report.
+    # TODO:
     moma_report = combine_reports(sample_name, mutation_report, cnv_report, 
             fusion_report, outdir_path)
 
+    # TODO:
+    #  '''
     # If we need a Rave report, generate one now.
     if rave_report:
         log.write_log('info', 'Generating a CSV file that can be uploaded '
                 'into Theradex Rave.')
         run_moma2rave(moma_report, outdir_path, rave_report)
+    #  '''
 
     # Clean up and move the logfile to data dir.
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
@@ -981,6 +1018,15 @@ if __name__ == '__main__':
     else:
         genelist = args.genes.split(',')
 
+    # TODO: Let's centralize this into one metric rather than trying to sort
+    # through two different ones. 
+    fusion_threshold = 0
+    if args.source == 'oca':
+        fusion_threshold = int(args.reads)
+    elif args.source == 'tso500':
+        fusion_threshold = float(args.fvaf)
+
+
     main(args.vcf, args.source, args.name, genelist, args.popfreq, args.CNV, 
-            args.cu, args.cl, args.Fusion, args.reads, args.outdir, args.keep,
-            args.noanno, args.rave)
+            args.cu, args.cl, args.Fusion, fusion_threshold, args.outdir,
+            args.keep, args.noanno, args.rave)
