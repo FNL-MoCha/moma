@@ -21,7 +21,7 @@ use constant DEBUG => 0;
 my $scriptname = basename($0);
 my $version = "1.0.022020";
 
-my $vaf = 1.0;;
+my $vaf = 0.01; 
 my $outfile;
 my $help;
 my $ver_info;
@@ -33,6 +33,8 @@ EOT
 
 my $usage = <<"EOT";
 USAGE: $scriptname [options] <TSO500 *.fusions.txt file>
+
+Options
     -V, --VAF         Only report fusions above this threshold (DEFAULT: 
                       $vaf).
     -o, --output      Write output to file.
@@ -41,24 +43,17 @@ USAGE: $scriptname [options] <TSO500 *.fusions.txt file>
 EOT
 
 GetOptions( 
-    "VAF|V=f"       => \$reads,
+    "VAF|V=f"       => \$vaf,
     "outfilel|o=s"  => \$outfile,
     "help|h"        => \$help,
     "version|v"     => \$ver_info,
 );
 
-sub help { 
-    printf "%s - %s\n%s\n\n%s\n", $scriptname, $version, $description, $usage;
-    exit;
-}
+sub version { print "$scriptname - version: $version\n\n" }
+sub help { version(); print "$description\n$usage\n\n" }
 
-sub version_info {
-    printf "%s - %s\n", $scriptname, $version;
-    exit;
-}
-
-help() if $help;
-version_info() if $ver_info;
+help() and exit if $help;
+version() and exit if $ver_info;
 
 # Check we have some files to process
 if ( @ARGV < 1 ) {
@@ -75,7 +70,6 @@ if ( $outfile ) {
     $out_fh = \*STDOUT;
 }
 
-
 ########======================  END ARG Parsing  ======================########
 my $input_file = shift;
 # my @results;
@@ -85,6 +79,7 @@ my $return_data = proc_fusions_file(\$input_file);
 dd $return_data;
 exit;
 
+=cut
 my @header = qw (Fusion Junction ID Read_Count Driver_Gene Partner_Gene);
 print {$out_fh} join(',', @header), "\n"; 
 
@@ -101,6 +96,8 @@ for my $fusion ( sort{ versioncmp($a, $b) } keys %$return_data ) {
     print {$out_fh} join(',', $name, $junct, $id, 
         @{$return_data->{$fusion}}{qw(COUNT DRIVER PARTNER)}), "\n";
 }
+=cut
+
 
 sub proc_fusions_file {
     my $input_file = shift;
@@ -116,6 +113,17 @@ sub proc_fusions_file {
     my @header = split(/\t/, $hline);
 
     while (<$fh>) {
+        my %tmp_data;
+
+        chomp(my @elems = split(/\t/));
+        @tmp_data{@header} = @elems;
+
+        # Create a junction field.
+        $tmp_data{'junction'} = sprintf('%s:%s::%s:%s', 
+            @tmp_data{qw(Chr1 Pos1 Chr2 Pos2)});
+        dd \%tmp_data;
+
+=cut
         next if /^#/;
         my @data = split;
 
@@ -154,6 +162,7 @@ sub proc_fusions_file {
             }
             $results{$fid}->{'COUNT'} = $count;
         }
+=cut
     }
     return \%results;
 }
