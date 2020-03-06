@@ -28,7 +28,7 @@ from collections import defaultdict
 from lib import logger
 from lib import utils
 
-version = '1.1.20200219'
+version = '1.2.20200306'
 
 # Globals
 global verbose, debug, quiet
@@ -62,7 +62,7 @@ closs = '1'      # 5% confidence interval <= 1 copy for deletion.
 ct_amp = '1.15'  # Fold Change default for TSO500
 ct_loss = '0.85' # Fold change default for TSO500
 freads = '250'   # Minimum fusion reads > 250 for call.
-fvaf = '0.05'    # Fusion VAF for TSO500
+fvaf = '0.01'    # Fusion VAF for TSO500
 
 
 def get_args():
@@ -120,7 +120,7 @@ def get_args():
              'option selected. Default: %(default)s.'
     )
     filter_args.add_argument(
-        '--vaf',
+        '--fvaf',
         metavar='FLOAT <fusion allele frequency<',
         default=fvaf,
         help='Variant Allele Frequency (VAF) threshold for fusion reads. This '
@@ -220,10 +220,6 @@ def get_args():
     elif args.source == 'tso500':
         args.cu = ct_amp if not args.cu else args.cu
         args.cl = ct_loss if not args.cl else args.cl
-
-    # TODO:
-        # Need to do some more arg checking to make sure we're sanely passing
-        # args
     return args
 
 def get_name_from_vcf(vcf):
@@ -290,13 +286,14 @@ def generate_report(annovar_data, genes, outfile):
         csv_writer = csv.writer(outfh, lineterminator="\n", delimiter=",")
 
         wanted_fields = ('Chromosome', 'Start_Position', 'Reference_Allele',
-            'Tumor_Seq_Allele2', 'vaf', 'ref_reads', 'alt_reads', 'avsnp142', 
-            'cosid', 'Hugo_Symbol', 'Transcript_ID', 'HGVSc', 'HGVSp_Short', 
-            'Exon_Number', 'Variant_Classification', 'sift', 'polyphen', 
-            'CLNSIG', 'CLNREVSTAT', 'MOI_Type', 'Oncogenicity', 'Effect')
+            'Tumor_Seq_Allele2', 'i_TumorVAF', 't_ref_count', 't_alt_count', 
+            'Existing_variation', 'Hugo_Symbol', 'RefSeq', 'HGVSc', 
+            'HGVSp_Short', 'Exon_Number', 'Variant_Classification',
+            'SIFT', 'PolyPhen', 'Clinvar_Significance', 'Clinvar_Review_Status', 
+            'MOI_Type', 'Oncogenicity', 'Effect')
 
         csv_writer.writerow(('Chr', 'Pos', 'Ref', 'Alt', 'VAF', 'Ref_Reads',
-            'Alt_Reads', 'dbSNP_Id', 'COSMIC_Id', 'Gene', 'Transcript', 'CDS',
+            'Alt_Reads', 'Variant_Id', 'Gene', 'Transcript', 'CDS',
             'AA', 'Location', 'Function', 'Sift', 'Polyphen', 
             'Clinvar_Significance', 'Clinvar_Review_Status', 'MOI_Type', 
             'Oncogenicity', 'Effect'))
@@ -346,115 +343,6 @@ def __load_blacklist():
     with open(blacklist_file) as fh:
         return [line.split()[0] for line in fh]
 
-def __marry_oncokb_data(annovar_file, annotated_maf, source):
-    """
-    Add the oncokb annotations to the annovar data so that we can use this in
-    the report generation step later on.  
-    """
-    final_data = defaultdict(dict)
-    blacklist_vars = __load_blacklist()
-
-    # Load the OncoKB Annotated data first...
-    with open(annotated_maf) as amaf_fh:
-        header = amaf_fh.readline().rstrip('\n').split('\t')
-        for line in amaf_fh:
-            data = line.rstrip('\n').split('\t')
-            varid = ':'.join(itemgetter(*[0,1,2,4,5])(data))
-
-            # Check to see if variant is in blacklist
-            if varid in blacklist_vars:
-                log.write_log('note', 'Removing variant {}:{} because it is '
-                    'blacklisted.'.format(varid, data[8]))
-                continue
-            final_data[varid] = dict(zip(header, data))
-
-    # ...now load the Annovar stem data and join with the above.
-    with open(annovar_file) as annovar_fh:
-        header = annovar_fh.readline().rstrip('\n').split('\t')
-        header.extend(['Otherinfo1', 'Otherinfo2', 'vcf_chr', 'vcf_pos',
-            'vcf_id', 'vcf_ref', 'vcf_alt', 'vcf_qual', 'vcf_filter',
-            'vcf_info', 'vcf_format', 'vcf_sample'])
-
-        header = list(map(lambda x: x.split('.')[0], header))
-
-        for line in annovar_fh:
-            data = dict(zip(header, line.rstrip('\n').split('\t')))
-            #  utils.pp(data)
-            #  utils.__exit__(sys._getframe().f_lineno, '')
-
-            varid = ':'.join(itemgetter(*['Gene', 'Chr', 'Start', 'Ref', 
-                'Alt'])(data))
-
-            if varid in final_data:
-
-                var_data = dict(zip(data['vcf_format'].split(':'),
-                    data['vcf_sample'].split(':')))
-
-                if var_data['GT'] == './.':
-                    log.write_log('note', 'Removing entry for {} because it '
-                        'is a NOCALL that should be filtered out.'.format(varid))
-                    del final_data[varid]
-                    continue
-
-                # Some of the WES data can have random multi-allele entries,
-                # which I think we don't want to contend with at the moment
-                # untile we know better the how and why. Also sometimes for some
-                # reason there is no AD field in the VCF; just toss these
-                # entries out. 
-                try:
-                    if var_data['AD'].count(',') > 1:
-                        log.write_log('warn', 'Multiple entries in line for {}. '
-                            'Need to split apart.'.format(varid))
-                        del final_data[varid]
-                        continue
-                except KeyError:
-                    log.write_log('warn', 'No AD field for this entry. Can '
-                        'not process this entry. Skipping.')
-                    del final_data[varid]
-                    continue
-
-                try:
-                    ref_reads, alt_reads = var_data['AD'].split(',')
-                    vaf = '{:.4f}'.format(float(alt_reads) / (float(ref_reads) +
-                        float(alt_reads)) * 100.00)
-                except:
-                    utils.__exit__(msg='Issue getting VAF for {}; vaf_str: '
-                        '{}'.format(varid, var_data), color='red')
-
-                if source != 'tso500' and float(vaf) < 1:
-                    log.write_log('note', 'Removing variant {} because VAF '
-                        'is <1% and this is not ctDNA assay data.'.format(varid))
-                    del final_data[varid]
-                    continue
-
-                # Run the Routbort Rule; Filter out any variants with alt reads
-                # < 25.
-                if source != 'tso500' and float(alt_reads) < 25:
-                    log.write_log('note', 'Removing variant {} because Alt '
-                        'reads are less than 25 (alt reads: {}).'.format(
-                            varid, alt_reads))
-                    del final_data[varid]
-                    continue
-
-                new = {
-                    'sift'        : __translate(data['SIFT_pred']),
-                    'polyphen'    : __translate(data['Polyphen2_HDIV_pred']),
-                    'vaf'         : vaf,
-                    'alt_reads'   : alt_reads,
-                    'ref_reads'   : ref_reads,
-                    'CLNREVSTAT'  : data['CLNREVSTAT'],
-                    'CLNSIG'      : data['CLNSIG'],
-                    'cosid'       : __get_cosmic_id(data['cosmic89_noEnst']),
-                    'max_popfreq' : data['PopFreqMax'],
-                    '1000g_mean'  : __get_avg_pop(data, '1000G'),
-                    'exac_mean'   : __get_avg_pop(data, 'ExAC'),
-                    'gnomad_mean' : __get_avg_pop(data, 'GnomAD')
-                }
-                final_data[varid].update(new)
-    #  utils.pp(final_data)
-    #  utils.__exit__(432,'')
-    return dict(final_data)
-
 def __get_avg_pop(annovar_data, population):
     """
     Read in a set of population frequency data, and return the average.
@@ -467,26 +355,6 @@ def __get_avg_pop(annovar_data, population):
 
     freqs = [float(x) for x in freq_data if x.replace('.','',1).isdigit()]
     return (sum(freqs) / len(freqs)) if freqs else '.'
-
-def __get_cosmic_id(cosmic_data):
-    """
-    Get the COSMIC ID for the variant if one in Annovar. The issue is that there
-    can be more than one per variant, and we have to try to map it adequately.
-    """
-    if cosmic_data == '.':
-        return '.'
-    cosid, occurance = cosmic_data.split(';')
-    return cosid.strip('ID=')
-
-def __translate(string):
-    sp_conversion = {
-        'T' : 'Tolerated',
-        'D' : 'Damaging',
-        'B' : 'Benign',
-        'P' : 'Probably Damaging',
-        '.' : '-'
-    }
-    return sp_conversion.get(string, '???')
 
 def __get_vaf(varid, vafstr, source):
     if source == 'oca':
@@ -522,14 +390,14 @@ def oncokb_annotate(annovar_file, source, popfreq):
     # Make a truncated MAF file of the annovar data that can be read by OncoKB
     # annotator.
     log.write_log('info', 'Converting Annovar data to a truncated MAF file.')
-    trunc_maf = annovar_file.replace('.txt', '.truncmaf')
+    trunc_maf = annovar_file.replace('.annovar.txt', '.maf')
     annovar2maf_cmd = [os.path.join(scripts_dir, 'annovar2maf.pl'), '-o', 
             trunc_maf, annovar_file]
     run(annovar2maf_cmd, 'Annovar2MAF', silent=not verbose)
 
     # Use TSO500 to annotate the truncated MAF file.
     log.write_log('info', 'Running MOMA')
-    annotated_maf = trunc_maf.replace('.annovar.truncmaf', '.oncokb.tsv')
+    annotated_maf = trunc_maf.replace('.maf', '.oncokb.maf')
     oncokb_annot_cmd = (
         os.path.join(scripts_dir, 'moma.pl'), 
         '-a', 'oncokb',
@@ -550,10 +418,84 @@ def oncokb_annotate(annovar_file, source, popfreq):
     for line in summary_report:
         log.write_log('', line)
 
-    # Marry the new OncoKB annotations with the original Annovar Data.
-    log.write_log('info', 'Combining Annovar data with OncoKB annotations, '
-        'and running blacklist.')
-    return(__marry_oncokb_data(annovar_file, annotated_maf, source))
+    # Run final filters and prepare data for report.
+    log.write_log('info', 'Running final filters and preparing data for report.')
+    return (__filter_oncokb_data(annotated_maf, source))
+
+def __filter_oncokb_data(annotated_maf, source):
+    """
+    Filter out unwanted calls and prepare data for final report.
+    """
+    final_data = defaultdict(dict)
+    blacklist_vars = __load_blacklist()
+
+    # Load the OncoKB Annotated data first...
+    with open(annotated_maf) as amaf_fh:
+        header = amaf_fh.readline().rstrip('\n').split('\t')
+
+        for line in amaf_fh:
+            #  data = line.rstrip('\n').split('\t')
+            var_data = dict(zip(header, line.rstrip('\n').split('\t')))
+            varid = ':'.join(
+                itemgetter(*['Hugo_Symbol', 'Chromosome','Start_Position', 
+                    'Reference_Allele', 'Tumor_Seq_Allele2'])(var_data)
+            )
+
+            # Check to see if variant is in blacklist
+            if varid in blacklist_vars:
+                log.write_log('note', 'Removing variant {}:{} because it is '
+                    'blacklisted.'.format(varid, var_data['HGVSp_Short']))
+                continue
+
+            # Remove variants with low VAF if not running ctDNA panel.
+            if source != 'tso500' and float(var_data['i_TumorVAF']) < 0.01:
+                log.write_log('note', 'Removing variant {} because VAF '
+                    'is <1% and this is not ctDNA assay data.'.format(varid))
+                continue
+
+            # Run the Routbort Rule; Filter out any variants with alt reads
+            # < 25.
+            if source != 'tso500' and float(var_data['t_alt_count']) < 25:
+                log.write_log('note', 'Removing variant {} because Alt '
+                    'reads are less than 25 (alt reads: {}).'.format(
+                        varid, var_data['t_alt_count']))
+                continue
+
+            # Change the output format for some fields.
+            # TODO: Check this is working right. I think the formatting is
+            # removing the floating point value.
+            var_data['i_TumorVAF'] = '{:.2f}'.format(
+                    float(var_data['i_TumorVAF']) * 100.00)
+            var_data['Exon_Number'] = 'exon{}'.format(
+                    var_data['Exon_Number'].split('/')[0])
+
+            final_data[varid] = var_data
+
+
+            '''
+            # XXX This is residual from the previous method. I don't need any of
+            # this, but it could _possibly_ be helpful to have th PopFreqMax and
+            # mean pop frequency values for each type in the output. 
+            new = {
+                'sift'        : __translate(data['SIFT_pred']),
+                'polyphen'    : __translate(data['Polyphen2_HDIV_pred']),
+                'vaf'         : vaf,
+                'alt_reads'   : alt_reads,
+                'ref_reads'   : ref_reads,
+                'CLNREVSTAT'  : data['CLNREVSTAT'],
+                'CLNSIG'      : data['CLNSIG'],
+                'cosid'       : __get_cosmic_id(data['cosmic89_noEnst']),
+                'max_popfreq' : data['PopFreqMax'],
+                '1000g_mean'  : __get_avg_pop(data, '1000G'),
+                'exac_mean'   : __get_avg_pop(data, 'ExAC'),
+                'gnomad_mean' : __get_avg_pop(data, 'GnomAD')
+            }
+            final_data[varid].update(new)
+            '''
+
+    #  utils.pp(final_data)
+    #  utils.__exit__(432,'')
+    return dict(final_data)
 
 def gen_cnv_report(cnv_data_file, cu, cl, genelist, outfile, source):
     """
@@ -675,6 +617,27 @@ def gen_fusion_report(vcf, reads, genelist, filename):
     but then let this script handle the final filter in order to record those
     filtered out in the logs.
     """
+    
+    '''
+
+    if source == 'oca':
+        cmd = (os.path.join(scripts_dir, 'get_cnvs.pl'), '--cu', cu, '--cl', cl,
+                cnv_data_file)
+        parsed_cnv_results = run(cmd, "Generating Oncomine CNV results data",
+            True, silent=not verbose)
+    elif source == 'tso500':
+        cmd = (os.path.join(scripts_dir, 'tso500_cnvs.pl'), cnv_data_file)
+        parsed_cnv_results = run(cmd, "Generating TSO500 CNV results data",
+                True, silent=not verbose)
+    elif source == 'wes':
+        logger.write_log('error', 'CNV data acquisition is not yet implemented '
+                'for WES panels yet. Skipping this step.')
+        return None
+
+    header = parsed_cnv_results.pop(0).rstrip('\n').split(',')
+    '''
+
+
     cmd = [
         os.path.join(scripts_dir, 'get_fusions.pl'), 
         '--reads', '100',
@@ -774,7 +737,7 @@ def __read_report(report):
     with open(report) as fh:
         return [line.rstrip('\n') for line in fh]
 
-def __verify_vcf(vcf, source):
+def __verify_vcf(vcf, source, noanno=False):
     '''
     Make sure that the VCF loaded matches the source string so that we can make
     sure that we're parsing it correctly.
@@ -790,6 +753,10 @@ def __verify_vcf(vcf, source):
         'tso500' : '##source=Pisces',
         'wes'    : '##joinAdjacentSNPs'
     }
+
+    # Let anything pass as a correct file if we use the `--noanno` option
+    if noanno: return True 
+
     with open(vcf) as fh:
         header = [line for line in fh if line.startswith('#')]
     if any(id_strings[source] in x for x in (header)):
@@ -833,7 +800,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     log.write_log('header', welcome_str)
 
     # Verify the VCF source is correct for the VCF that we've loaded.
-    if not __verify_vcf(vcf, data_source):
+    if not __verify_vcf(vcf, data_source, noanno):
         log.write_log('error', f'ERROR: The VCF source {data_source} does '
                 'not match the type of VCF input.')
         log.write_log(None, 'Check the source\nis correct for this kind of '
@@ -899,9 +866,9 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         f'{sample_name}_mocha_snv_indel_report.csv')
     log.write_log('info', f'Writing report data to {mutation_report}.')
     generate_report(oncokb_annotated_data, genes, mutation_report)
-    #  '''
+    '''
 
-    # XXX
+    #  XXX
     #  '''
     # Generate a CNV report if we're asking for one.
     cnv_report = None
@@ -935,9 +902,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     fusion_report = None
     if get_fusions:
 
-        units = ' reads'
-        if data_source == 'tso500':
-            units = '%'
+        units = '%' if data_source == 'tso500' else ' reads'
 
         log.write_log('info', 'Generating a Fusions report for sample {}. Using '
             'threshold of {}{}.'.format(sample_name, fusion_threshold, units))
@@ -951,9 +916,8 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
             fusion_data_file = '{}.fusion.txt'.format(vcf.replace('.vcf', ''))
 
         #XXX: Pick it up here!
-
-        gen_fusion_report(fusion_data_file, fusion_threshold, genelist, fusion_report)
-
+        gen_fusion_report(fusion_data_file, fusion_threshold, genelist, 
+                fusion_report)
         log.write_log('info', "Done with Fusions report.")
 
     # Combine the three reports into one master report.
@@ -1018,14 +982,13 @@ if __name__ == '__main__':
     else:
         genelist = args.genes.split(',')
 
-    # TODO: Let's centralize this into one metric rather than trying to sort
-    # through two different ones. 
+    # Centralize this into one metric rather than trying to sort through 
+    # different ones depending on the platform.
     fusion_threshold = 0
     if args.source == 'oca':
         fusion_threshold = int(args.reads)
     elif args.source == 'tso500':
         fusion_threshold = float(args.fvaf)
-
 
     main(args.vcf, args.source, args.name, genelist, args.popfreq, args.CNV, 
             args.cu, args.cl, args.Fusion, fusion_threshold, args.outdir,
