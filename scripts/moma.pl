@@ -30,7 +30,7 @@ use constant FALSE => 0;
 
 my $DEBUG = 0;
 
-my $version = "v0.37.092519";
+my $version = "v1.0.030620";
 my $scriptdir = dirname($0);
 
 # Default lookup files.
@@ -245,7 +245,6 @@ for my $maf_file (@ARGV) {
         ? ($new_file = $outfile)
         : (($new_file = $maf_file) =~ s/\.truncmaf/.annotated.maf/);
     $logger->info( "Finished annotating. Printing results..." );
-    # XXX
     print_results($results, $new_file, $mois_only, $trim_file);
     $logger->info("Done with $maf_file!\n\n");
 }
@@ -286,19 +285,27 @@ sub annotate_maf {
         }
 
         my @wanted_terms = qw(Hugo_Symbol Chromosome Start_Position End_Position 
-            Reference_Allele Tumor_Seq_Allele2 HGVSc HGVSp_Short Transcript_ID 
+            Reference_Allele Tumor_Seq_Allele2 HGVSc HGVSp_Short RefSeq 
             Exon_Number Variant_Classification);
         my ($gene, $chr, $start, $end, $ref, $alt, $hgvs_c, $hgvs_p, $tscript_id, 
             $exon, $function) = @var_data{@wanted_terms};
 
+        # Now that we're pulling the exon data in the MAF format, need to format
+        # it a little differently.
+        if ($exon) {
+            $exon = sprintf("exon%s", (split(/\//, $exon))[0]);
+        } else {
+            $exon = '';
+        }
+        
         # If splice mutation, location may be intronic, and we need to have a
         # val for 'exon' anyway.
-        $exon = 'splicesite' if ($exon eq '' and $function =~ /splice/);
+        $exon = 'splicesite' if ($exon eq '' and $function =~ /splice/i);
 
         do { 
-            print "$warn: Still no exon info for var: \n";
+            print "$warn Still no exon info for var: \n";
             dd @var_data{@wanted_terms} 
-        } and exit if $exon eq '';
+        } and exit 1 if $exon eq '';
 
         # Annotate with a Hotspots BED file
         if ($annot_method eq 'hs_bed') {
