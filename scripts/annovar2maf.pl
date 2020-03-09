@@ -316,10 +316,10 @@ sub get_maf_fields {
 
     # Get tumor specific coverage information.
     my ($t_depth, $t_ref_count, $t_alt_count, $i_TumorVAF) = __get_cov_info($var_data);
-    $collected_data->{'t_depth'}      = $t_depth;
-    $collected_data->{'t_ref_count'}  = $t_ref_count;
-    $collected_data->{'t_alt_count'}  = $t_alt_count;
-    $collected_data->{'i_TumorVAF'}   = $i_TumorVAF;
+    $collected_data->{'t_depth'}      = $t_depth     // '.';
+    $collected_data->{'t_ref_count'}  = $t_ref_count // '.';
+    $collected_data->{'t_alt_count'}  = $t_alt_count // '.';
+    $collected_data->{'i_TumorVAF'}   = $i_TumorVAF  // '.';
 
     # There are some empty fields that are required for a valid MAF.
     my @empty = qw(n_depth n_ref_count n_alt_count);
@@ -548,9 +548,26 @@ sub __get_cov_info {
     my %var_info;
     @var_info{split(/:/, $data->{'vcf_format'})} = split(/:/, $data->{'vcf_sample'});
 
-    my ($ref_count, $alt_count) = split(/,/, $var_info{'AD'});
-    my $vaf = sprintf("%.2f", $alt_count / ($alt_count + $ref_count));
-
+    my ($ref_count, $alt_count, $vaf);
+    # For some reason, some WES entries do not have an AD field, so one can not
+    # determine the ref and alt reads easily.  For now, try to back calculate
+    # from AF and DP. May want to ultimately skip these entries?
+    # if (! $var_info{'AD'}) { dd \%var_info; dd $data; exit; }
+    # XXX
+    if (! $var_info{'AD'}) { 
+        print "$warn No 'AD' field for this entry. Attempting to calculate " . 
+            "values from AF and DP.\n";
+        if (! $var_info{'DP'} || ! $var_info{'AF'}) {
+            print "$warn Can not get coverage info for this variant. Skipping.\n";
+            return 0;
+        }
+        $vaf = $var_info{'AF'};
+        $alt_count = $vaf * $var_info{'DP'};
+        $ref_count = $var_info{'DP'} - $alt_count;
+    } else {
+        ($ref_count, $alt_count) = split(/,/, $var_info{'AD'});
+        $vaf = sprintf("%.4f", $alt_count / ($alt_count + $ref_count));
+    }
     return ($var_info{'DP'}, $ref_count, $alt_count, $vaf);
 }
 
