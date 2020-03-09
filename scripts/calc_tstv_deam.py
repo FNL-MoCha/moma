@@ -32,7 +32,7 @@ sys.path.insert(0, lib_path)
 import natsort
 
 
-version = '1.0.120319'
+version = '1.1.030920'
 global quiet
 
 reference=os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 
@@ -121,7 +121,8 @@ def run_illumina_parser(vcf):
                 if any(',' in x for x  in (elems[3], elems[4])): continue
                 if elems[6] in ('PASS', '.'):
                     if './.' in elems[tumor_index]: continue
-                    vaf, ref_cof, alt_cov = __get_vaf(elems, tumor_index)
+                    vaf, ref_cof, alt_cov = __get_vaf(elems, tumor_index,
+                        'illumina')
                     if float(vaf) < 1: continue
                     vcf_data.append(["{}:{}".format(elems[0], elems[1]),
                         "{}>{}".format(elems[3], elems[4])])
@@ -272,24 +273,32 @@ def __get_sample_name(vcf):
             if line.startswith('#CHROM'):
                 return line.rstrip('\n').split('\t')[-1]
 
-def __get_vaf(vcf_elems, info_index):
-    vcf_format = dict(zip(vcf_elems[8].split(':'), vcf_elems[info_index].split(':')))
+def __get_vaf(vcf_elems, info_index, source):
+    vcf_format = dict(
+        zip(vcf_elems[8].split(':'), vcf_elems[info_index].split(':'))
+    )
 
-    ref_reads, alt_reads = vcf_format['AD'].split(',')
+    ref_reads = 0.0
+    alt_reads = 0.0
     try:
+        ref_reads, alt_reads = vcf_format['AD'].split(',')
         vaf = '{:.2f}'.format(
             (float(alt_reads) / (float(alt_reads) + float(ref_reads))) * 100)
     except:
         sys.stderr.write("WARNING: Can not get VAF from alt/ref reads for this "
-            "entry:\n")
-        pp(format)
+            "entry:\n\t")
+        pp(vcf_format)
         sys.stderr.write("Trying to get allele frequency from format field "
             "entry.\n")
         for k,v in vcf_format.items():
             if 'AF' in k:
-                vaf = v
+                vaf = float(v) * 100.00
+                sys.stderr.write("Got VAF from 'AF' field; data may not be "
+                    "accurate.\n\n")
                 break
         if vaf is None:
+            sys.stderr.write("Can not retrieve VAF info for this entry. "
+                    "Skipping!\n\n")
             return 0
     return vaf, ref_reads, alt_reads
 
