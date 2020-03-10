@@ -28,7 +28,7 @@ from collections import defaultdict
 from lib import logger
 from lib import utils
 
-version = '1.2.20200306'
+version = '1.3.20200310'
 
 # Globals
 global verbose, debug, quiet
@@ -462,8 +462,6 @@ def __filter_oncokb_data(annotated_maf, source):
                 continue
 
             # Change the output format for some fields.
-            # TODO: Check this is working right. I think the formatting is
-            # removing the floating point value.
             var_data['i_TumorVAF'] = '{:.2f}'.format(
                     float(var_data['i_TumorVAF']) * 100.00)
             var_data['Exon_Number'] = 'exon{}'.format(
@@ -471,8 +469,8 @@ def __filter_oncokb_data(annotated_maf, source):
 
             final_data[varid] = var_data
 
-
             '''
+            # TODO: Remove this.
             # XXX This is residual from the previous method. I don't need any of
             # this, but it could _possibly_ be helpful to have th PopFreqMax and
             # mean pop frequency values for each type in the output. 
@@ -938,7 +936,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
     if not keep_intermediate_files:
         for f in contents:
-            if any(f.endswith(x) for x in ('truncmaf', 'avinput', 'oncokb.tsv', 
+            if any(f.endswith(x) for x in ('truncmaf', 'avinput', 'oncokb.maf', 
                 'simple.vcf', 'snv_indel_report.csv', 'cnv_report.csv', 
                 'fusion_report.csv')):
                     log.write_log('debug', f'Removing {f}.')
