@@ -116,7 +116,9 @@ sub proc_fusions_file {
         my %tmp_data;
 
         chomp(my @elems = split(/\t/));
+
         @tmp_data{@header} = @elems;
+
 
         # Create a junction field.
         $tmp_data{'junction'} = sprintf('%s:%s::%s:%s', 
