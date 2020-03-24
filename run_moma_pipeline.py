@@ -771,7 +771,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         sample_name = get_name_from_vcf(vcf)
 
     # Set up the logger.
-    level = 'debug' if debug else 'info'
+    level = 'debug' if debug else 'error'
     logfile = 'moma_reporter_{}_{}.log'.format(sample_name, utils.today())
 
     # By default logger is set to quiet. If we want both logfile and stdout
@@ -799,10 +799,8 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
 
     # Verify the VCF source is correct for the VCF that we've loaded.
     if not __verify_vcf(vcf, data_source, noanno):
-        log.write_log('error', f'ERROR: The VCF source {data_source} does '
-                'not match the type of VCF input.')
-        log.write_log(None, 'Check the source\nis correct for this kind of '
-            'VCF file.')
+        log.write_log('error', f'Data type "{data_source}" does not appear '
+            'to be correct. Check the source is correct for this kind of VCF')
         sys.exit(1)
 
     if debug or noanno:
