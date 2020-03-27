@@ -12,7 +12,7 @@ information, etc., and mapping them to OncoKB_, where the variant's
 
 In addition, simple filtering is performed on the output data to remove variants
 that are not clinically relevant. We remove variants that are above a set 
-population frequency as determined from GnomAD_, ExAC_, and 1000G_, as well as 
+population frequency as determined from GnomAD_, ExAC, and 1000G_, as well as 
 non-coding variants (i.e. intronic) and synonymous variants. The remaining calls, 
 then, are mapped to OncoKB and the variant's Oncogenicity and Oncogenic Effect
 annotation is added to the variant call if there is a match.
@@ -454,6 +454,5 @@ process samples.
 .. _Annovar: https://doc-openbio.readthedocs.io/projects/annovar/en/latest/
 .. _OncoKB: https://www.oncokb.org/
 .. _GnomAD: https://gnomad.broadinstitute.org/
-.. _ExAC: exac.broadinstitute.org
 .. _1000G: https://www.internationalgenome.org/1000-genomes-browsers/
 .. _VEP: https://useast.ensembl.org/info/docs/tools/vep/index.html
