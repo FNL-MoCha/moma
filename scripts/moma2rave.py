@@ -11,7 +11,7 @@ import argparse
 
 from pprint import pprint as pp # noqa
 
-version = '1.1.012420'
+version = '1.2.032720'
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
@@ -131,12 +131,19 @@ def line2dict(header_line, line):
     dict with the data keyed by the Theradex header elems suitable for printing
     later.
     """
+
+    #  Theradex would like specific column headers that are not the same as what
+    #  I'm using. We'll have to map some of these. Note that if the incoming field
+    #  is the same as the desired output field, no need to re-map, so it's not
+    #  represented in the dict below.
     theradex_key_map = {
-        'Chr' : 'Chromosome', 'Pos' : 'Position', 'Ref' : 'Reference Allele', 
-        'Alt' : 'Alternative Allele', 'VAF' : 'Variant Allele Frequency', 
-        'Ref_Reads' : 'Reference Coverage', 'Alt_Reads' : 'Alternative Coverage',
-        'COSMIC_Id' : 'Variant ID', 'CDS' : 'Coding Sequence', 'AA' : 'Amino Acids',
-        'CN' : 'Copies', 'Read_Count' : 'Read Counts'
+        'Chr'          : 'Chromosome',
+        'Pos'          : 'Position',
+        'Ref_Reads'    : 'RefCov',
+        'Alt_Reads'    : 'AltCov',
+        'Variant_Id'   : 'VariantID',
+        'CN'           : 'Copies',
+        'Read_Count'   : 'ReadCounts',
     }
     header = next(csv.reader(header_line.splitlines(), delimiter=','))
     theradex_header = [theradex_key_map.get(x, x) for x in header]
@@ -151,12 +158,10 @@ def print_data(data, pnum, tid, sid, outfile):
         outfh = open(outfile, 'w')
 
     csv_writer = csv.writer(outfh, delimiter=',')
-    header = ['Protocol Number', 'Treatment patient ID', 'Specimen ID',
-        'Mutation Type', 'Gene', 'Chromosome', 'Position', 'Reference Allele', 
-        'Alternative Allele', 'Transcript', 'Coding Sequence', 'Amino Acids', 
-        'Variant ID', 'Variant Allele Frequency', 'Coverage', 
-        'Reference Coverage', 'Alternative Coverage', 'Copies', 'Read Counts',
-        'Function']
+    header = ['Protocol', 'Patient ID', 'Specimen ID', 'VariantType', 'Gene', 
+        'Chromosome', 'Position', 'Ref', 'Alt', 'Transcript', 'CDS', 'AA', 
+        'VariantID', 'VAF', 'Coverage', 'RefCov', 'AltCov', 'Copies', 
+        'ReadCounts', 'Function']
     csv_writer.writerow(header)
 
     out_data = []
@@ -165,12 +170,12 @@ def print_data(data, pnum, tid, sid, outfile):
         if var_type in data:
             for var in data[var_type]:
                 var_data = {x : var.get(x, '') for x in header}
-                var_data.update({'Mutation Type' : var_type})
+                var_data.update({'VariantType' : var_type})
                 
                 if var_type == 'SNV':
                     # Need to get total coverage info and function into the data
-                    coverage = str(int(var_data['Reference Coverage']) +
-                            int(var_data['Alternative Coverage']))
+                    coverage = str(int(var_data['RefCov']) +
+                            int(var_data['AltCov']))
                     var_data.update({'Coverage' : coverage})
                 elif var_type == 'CNV':
                     # If CNV, have to add effect
@@ -189,8 +194,8 @@ def print_data(data, pnum, tid, sid, outfile):
                         'Function' : 'Fusion'
                     })
                 var_data.update({
-                    'Protocol Number' : pnum,
-                    'Treatment patient ID' : tid,
+                    'Protocol' : pnum,
+                    'Patient ID' : tid,
                     'Specimen ID' : sid,
                 })
                 out_data.append(var_data)
