@@ -18,7 +18,5 @@ TODO
 hg19*
 resource/count.txt
 doc/_build
-doc/_templates
-doc/_static
 doc/old
 doc/Makefile
