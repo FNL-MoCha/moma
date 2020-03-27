@@ -27,7 +27,7 @@ that can be easily processed through the rest of the tool.
 Workflow
 ********
 
-.. image:: ./docs/moma_workflow.png
+.. image:: docs/moma_workflow.png
    :height: 825px
    :width: 637px
 
@@ -40,6 +40,6 @@ Installation details can be found in the documentation PDF file or online at the
 .. _Annovar: https://doc-openbio.readthedocs.io/projects/annovar/en/latest/
 .. _OncoKB: https://www.oncokb.org/
 .. _GnomAD: https://gnomad.broadinstitute.org/
-.. _ExAC: exac.broadinstitute.org
+.. _ExAC: https://exac.broadinstitute.org
 .. _1000G: https://www.internationalgenome.org/1000-genomes-browsers/
 .. _MOMA Read the Docs Page: https:// mocha-oncogenic-moi-annotator.readthedocs.io
