@@ -57,8 +57,10 @@ def get_args():
     # Validate that the input protocol number, treatment patient id, and
     # specimen id strings appear to be valid based on pattern match.  
     if args.protocol_number != '10231':
-        sys.stderr.write("ERROR: Protocol number should be `10231` only.\n")
-        sys.exit(1)
+        sys.stderr.write("WARN: Protocol number should be `10231` only. "
+            "Changing to correct value.\n")
+        args.protocol_number = '10231'
+        #  sys.exit(1)
     #  print('')
 
     #  print('treatment patient id: {} (type: {})'.format(args.treatment_id,

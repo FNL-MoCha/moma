@@ -14,6 +14,7 @@ report.
 """
 
 import os
+import re
 import sys
 import csv 
 import shutil
@@ -220,6 +221,9 @@ def get_args():
     elif args.source == 'tso500':
         args.cu = ct_amp if not args.cu else args.cu
         args.cl = ct_loss if not args.cl else args.cl
+
+    if args.rave:
+        args.rave = __validate_rave_ids(args.rave)
     return args
 
 def get_name_from_vcf(vcf):
@@ -741,6 +745,27 @@ def run_moma2rave(moma_report, path, rave_args):
     status = run(cmd, 'Generate a Rave compatible CSV file', silent=not verbose)
     if status:
         sys.exit(1)
+
+def __validate_rave_ids(ids):
+    ''' Validate the IDs passed to the ``rave`` arg. '''
+    elems = ids.split(';')
+
+    if elems[0] != '10231':
+        sys.stderr.write('WARN: Protocol number must always be 10231 for '
+            'now (may be more protocols later). Changing to match.\n')
+        elems[0] = '10231'
+
+    trid_regex = r'[A-Z]{2}\d{3}-\d{4}'
+    if not re.fullmatch(trid_regex, elems[1]):
+        sys.stderr.write(f'ERROR: {elems[1]} is not a valid treatment patient '
+            'ID string.\n')
+        sys.exit(1)
+
+    spid_regex = r'^' + elems[0] + '-\w+-\d$'
+    if not re.fullmatch(spid_regex, elems[2]):
+        sys.stderr.write(f'ERROR: {elems[2]} is not a valid specimen ID.\n')
+        sys.exit(1)
+    return ';'.join(elems)
 
 def __read_report(report):
     with open(report) as fh:
