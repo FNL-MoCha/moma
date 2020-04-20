@@ -11,7 +11,7 @@ import argparse
 
 from pprint import pprint as pp # noqa
 
-version = '1.2.032720'
+version = '1.3.042020'
 
 def get_args():
     parser = argparse.ArgumentParser(description = __doc__)
@@ -181,10 +181,7 @@ def print_data(data, pnum, tid, sid, outfile):
                     var_data.update({'Coverage' : coverage})
                 elif var_type == 'CNV':
                     # If CNV, have to add effect
-                    if var['Effect'] == 'Gain-of-function':
-                        func = 'Amplification' 
-                    else:
-                        func = 'Copy Loss'
+                    func = 'Copy Loss' if float(var['Copies']) < 2 else 'Amplification'
                     var_data.update({'Function' : func})
 
                 elif var_type == 'Fusion':
@@ -205,9 +202,9 @@ def print_data(data, pnum, tid, sid, outfile):
             # No data for this variant type. Pad out the section.
             var_data = {x :  '' for x in header}
             var_data.update({
-                'Mutation Type' : var_type,
-                'Protocol Number' : pnum,
-                'Treatment patient ID' : tid,
+                'VariantType' : var_type,
+                'Protocol' : pnum,
+                'Patient ID' : tid,
                 'Specimen ID' : sid,
             })
             out_data.append(var_data)
