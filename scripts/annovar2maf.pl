@@ -14,7 +14,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 
-my $version = '1.0.030620';
+my $version = '1.1.042120';
 
 use constant DEBUG => 0;
 use constant TRUE  => 1;
@@ -305,7 +305,7 @@ sub get_maf_fields {
     # Generate an "Existing Variation" field from COSMIC and dbSNP IDs.
     my $varid;
     my @ids = grep{ ! /\./ } ($var_data->{'avsnp142'}, $var_data->{'cosids'});
-    $collected_data->{'Existing_variation'} = join(',', @ids);
+    $collected_data->{'Existing_variation'} = join(';', @ids);
 
     # Translate the SIFT and PolyPhen data.
     $collected_data->{'SIFT'}     = __translate_sift_polyphen($var_data, 'sift');
