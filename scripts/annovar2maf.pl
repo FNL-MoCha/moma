@@ -521,7 +521,7 @@ sub __translate_sift_polyphen {
     my $mapper = {
         'sift' => {
             'T' => 'tolerated',
-            'D' => 'delterious',
+            'D' => 'deleterious',
         },
         'polyphen' => {
             'D' => 'Probably Damaging',
