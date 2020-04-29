@@ -32,7 +32,7 @@ sys.path.insert(0, lib_path)
 import natsort
 
 
-version = '1.1.030920'
+version = '1.2.042920'
 global quiet
 
 reference=os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 
@@ -127,6 +127,8 @@ def run_illumina_parser(vcf):
                     vcf_data.append(["{}:{}".format(elems[0], elems[1]),
                         "{}>{}".format(elems[3], elems[4])])
 
+    #  pp(vcf_data)
+    #  sys.exit()
     return sample_name, vcf_data
 
 def run_ion_parser(vcf):
@@ -280,6 +282,7 @@ def __get_vaf(vcf_elems, info_index, source):
 
     ref_reads = 0.0
     alt_reads = 0.0
+    vaf = None
     try:
         ref_reads, alt_reads = vcf_format['AD'].split(',')
         vaf = '{:.2f}'.format(
@@ -288,7 +291,11 @@ def __get_vaf(vcf_elems, info_index, source):
         sys.stderr.write("WARNING: Can not get VAF from alt/ref reads for this "
             "entry:\n\t")
         pp(vcf_format)
-        sys.stderr.write("Trying to get allele frequency from format field "
+        pp(vcf_elems)
+        sys.stderr.flush()
+        sys.stdout.flush()
+
+        sys.stderr.write("\nTrying to get allele frequency from format field "
             "entry.\n")
         for k,v in vcf_format.items():
             if 'AF' in k:
@@ -296,10 +303,10 @@ def __get_vaf(vcf_elems, info_index, source):
                 sys.stderr.write("Got VAF from 'AF' field; data may not be "
                     "accurate.\n\n")
                 break
-        if vaf is None:
-            sys.stderr.write("Can not retrieve VAF info for this entry. "
-                    "Skipping!\n\n")
-            return 0
+    if vaf is None:
+        sys.stderr.write("Can not retrieve VAF info for this entry. "
+                "Skipping!\n\n")
+        return 0
     return vaf, ref_reads, alt_reads
 
 def __make_context_hash():

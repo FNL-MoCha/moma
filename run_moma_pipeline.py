@@ -29,7 +29,7 @@ from collections import defaultdict
 from lib import logger
 from lib import utils
 
-version = '1.3.20200310'
+version = '1.4.20200429'
 
 # Globals
 global verbose, debug, quiet
@@ -383,11 +383,20 @@ def run_var_sig(vcf, source, outfile):
         'generating SBS-6 data.', ret_data=True, silent=not verbose)
     log.write_log('info', "Results from SBS script:")
 
-    for i in status[2:]:
+    # Capture the output we want from the script, avoiding error messages.
+    wanted_data = [ x.rstrip('\n') for x in status if x.startswith('\t') ]
+
+    for i in wanted_data[1:]:
         log.write_log(None, i)
 
-    tstv = status[8].split()[1]
-    deam = status[9].split()[2]
+    results = {}
+    for line in wanted_data:
+        if line.startswith('\t '):
+            key, val = (line.replace(' ','').split(':'))
+            results[key.replace('\t', '')] = val
+
+    tstv = results.get('Ts/Tv', None)
+    deam = results.get('DeamScore', None)
 
     if float(deam) > 1.7:
         log.write_log('warn', f'Deamination score is high ({deam}). Sample may '
