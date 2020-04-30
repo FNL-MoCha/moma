@@ -14,7 +14,7 @@ use Term::ANSIColor;
 use Data::Dump;
 
 
-my $version = '1.1.042120';
+my $version = '1.2.043020';
 
 use constant DEBUG => 0;
 use constant TRUE  => 1;
@@ -89,7 +89,6 @@ open ($outfh, ">", $outfile);
 my $var_data = parse_annovar(\$annovar_file);
 print_data($var_data, $outfh);
 
-
 sub print_data {
     my ($data, $outfh) = @_;
 
@@ -139,7 +138,7 @@ sub parse_annovar {
             && $var_data{'AAChange'} =~ /UNKNOWN/i;
 
         # DEBUG 
-        # next unless $var_data{'Gene'} eq 'FANCI';
+        # next unless $var_data{'Gene'} eq 'NCOR2';
         # print "$debug Skipping some entries!\n";
 
         # NOTE: Just some basic obvious filters.
@@ -184,6 +183,7 @@ sub parse_annovar {
         my $parsed_data = translate_annovar(\%var_data);
         push(@data, $parsed_data) if $parsed_data ne 0;
     }
+    # __exit__(__LINE__,'');
     print "$info Total parsed and retained variants: " . scalar(@data) . "\n";
     return \@data;
 }
@@ -553,15 +553,29 @@ sub __get_cov_info {
     # determine the ref and alt reads easily.  For now, try to back calculate
     # from AF and DP. May want to ultimately skip these entries?
     # if (! $var_info{'AD'}) { dd \%var_info; dd $data; exit; }
-    # XXX
+
+    $SIG{__WARN__} = sub {
+        my $msg = shift;
+        print "Issue with data elem:\n";
+        dd %var_info;
+        print "$msg\n";
+        exit 1;
+    };
+
     if (! $var_info{'AD'}) { 
         print "$warn No 'AD' field for this entry. Attempting to calculate " . 
             "values from AF and DP.\n";
+        # If the fields are missing, or we have one of those odd cases of comma
+        # filled AF fields, just skip the entry.  No easy way to recover at the
+        # moment, though this can be addressed later perhaps. 
         if (! $var_info{'DP'} || ! $var_info{'AF'}) {
             print "$warn Can not get coverage info for this variant. Skipping.\n";
             return 0;
         }
-        $vaf = $var_info{'AF'};
+        # Sometimes in WES data, there can be a multi-allelic entry for odd HP
+        # indels. Just capture first VAF until we can code out more
+        # sophisticated logic.
+        ($vaf) = (split(/,/, $var_info{'AF'}))[0];
         $alt_count = $vaf * $var_info{'DP'};
         $ref_count = $var_info{'DP'} - $alt_count;
     } else {

@@ -29,8 +29,6 @@ from collections import defaultdict
 from lib import logger
 from lib import utils
 
-version = '1.4.20200429'
-
 # Globals
 global verbose, debug, quiet
 verbose = False
@@ -44,6 +42,12 @@ package_root = os.path.dirname(__file__)
 scripts_dir = os.path.join(package_root, 'scripts')
 lib = os.path.join(package_root, 'lib')
 resources = os.path.join(package_root, 'resource')
+
+#version = '1.4.20200429'
+vfile = os.path.join(package_root, '_version.py')
+with open(vfile) as fh:
+    verline = fh.readline().rstrip('\n').split('=')[1]
+version = verline.lstrip(' ').replace('\'', '')
 
 # Want to sort the results and need a natural sort algorithm. Module natsort is
 # not available by default on some systems, so do a local import.
@@ -996,6 +1000,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     if debug:
         sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
         sys.exit()
+
 
 if __name__ == '__main__':
     args = get_args()
