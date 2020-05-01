@@ -20,6 +20,7 @@ import os
 import re
 import argparse
 import pysam
+import random
 import subprocess
 
 from pprint import pprint as pp # noqa
@@ -32,7 +33,7 @@ sys.path.insert(0, lib_path)
 import natsort
 
 
-version = '1.2.042920'
+version = '1.3.043020'
 global quiet
 
 reference=os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 
@@ -326,6 +327,16 @@ def __get_width(elems):
     return colwidth + 2
 
 def print_results(data, outfile):
+
+    # Need to get the SBS-96 order from the dict. Just read any set.
+    sbs_96 = data[random.choice(list(data))]['sbs_96']
+    keys = []
+    for sig in sorted(sbs_96):
+        elems = re.split(r'[\[\]]', sig)
+        keys.append(elems)
+    sorted_keys = sorted(keys, key=lambda x: (x[1], x[0], x[2]))
+    sig_order = ['%s[%s]%s' % (x[0], x[1], x[2]) for x in sorted_keys]
+
     if outfile:
         sys.stderr.write(f"Writing output to {outfile}.\n")
         outfh = open(outfile, 'w')
@@ -368,6 +379,17 @@ def print_results(data, outfile):
             *sbs_data,
             data[sample]['deam_score']]
         outfh.write(fline.format(*outdata, sp=' ', **field_widths))
+
+    # Write out the SBS-96 data
+    if outfile:
+        outfh = open(f'{outfile}.sbs96', 'w')
+    else:
+        outfh = sys.stdout
+    outfh.write('Sample,{}\n'.format(','.join(sig_order)))
+
+    for sample in natsort.natsorted(data):
+        sbs_data = [str(data[sample]['sbs_96'][x]) for x in sig_order]
+        outfh.write('{},{}\n'.format(sample, ','.join(sbs_data)))
 
 def main(vcfs, source, numprocs, quiet, reference, outfile):
     base_data = {}
