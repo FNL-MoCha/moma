@@ -32,8 +32,7 @@ lib_path = os.path.join(os.path.dirname(__file__), '../', 'lib')
 sys.path.insert(0, lib_path)
 import natsort
 
-
-version = '1.3.043020'
+version = '1.4.050420'
 global quiet
 
 reference=os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 
@@ -255,7 +254,12 @@ def get_motifs(var_contexts):
         else:
             transversions += var_contexts[context]
 
-    tstv = '{:.3f}'.format(transitions / transversions)
+    try:
+        tstv = '{:.3f}'.format(transitions / transversions)
+    except ZeroDivisionError:
+        # In the rare (usually just testing) event that we have no
+        # transversions, just skip and send tstv to 0.000
+        tstv = 0.000
     return tstv, motifs, transitions, transversions
 
 
