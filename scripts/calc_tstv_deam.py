@@ -25,12 +25,12 @@ import subprocess
 
 from pprint import pprint as pp # noqa
 
-
 # Need to import the natsort module, which is not commonly installed.  So, point
 # to a local copy of the module.
 lib_path = os.path.join(os.path.dirname(__file__), '../', 'lib')
 sys.path.insert(0, lib_path)
 import natsort
+import utils # noqa
 
 version = '1.4.050420'
 global quiet
@@ -103,33 +103,41 @@ def run_illumina_parser(vcf):
     # Rajesh says that the correct sample name will always be in the VCF file's
     # name, and that we can rely on that to map the VCF when a paired tumor /
     # normal is sequenced.
-    sample_name = os.path.basename(vcf).split('.')[0]
+    tumor_name = os.path.basename(vcf).split('.')[0]
+
+    header = []
+    var_data = []
+    with open(vcf) as fh:
+        for line in fh:
+            if line.startswith('##tumor_sample') or line.startswith('#CHROM'):
+                header.append(line.rstrip('\n'))
+            elif line.startswith('chr'):
+                var_data.append(line.rstrip('\n').split('\t'))
 
     # By default we should look at array elem 9
     tumor_index = 9
-    with open(vcf) as fh:
-        for line in fh:
-            if line.startswith('#CHROM'):
-                elems = line.rstrip('\n').split('\t')
-                for i, e in enumerate(elems):
-                    if elems[i] == sample_name:
-                        tumor_index = i
-                        break
-            elif line.startswith('chr'):
-                if 'AD' not in line: continue
-                elems = line.strip('\n').split('\t')
-                if any(',' in x for x  in (elems[3], elems[4])): continue
-                if elems[6] in ('PASS', '.'):
-                    if './.' in elems[tumor_index]: continue
-                    vaf, ref_cof, alt_cov = __get_vaf(elems, tumor_index,
-                        'illumina')
-                    if float(vaf) < 1: continue
-                    vcf_data.append(["{}:{}".format(elems[0], elems[1]),
-                        "{}>{}".format(elems[3], elems[4])])
+    if len(header) > 1:
+        # We have a tumor mapping.
+        tumor_name = header[0].split('=')[1]
+        for i,elem in enumerate(header[1].split('\t')):
+            if tumor_name == elem:
+                tumor_index = i
 
-    #  pp(vcf_data)
-    #  sys.exit()
-    return sample_name, vcf_data
+    for var in var_data:
+        # Sometimes (not sure the rule) some variants will be multi-allelic in
+        # the VCF.  I think it's usually homopolymer indels, and so we can skip
+        # these for this analysis.
+        if any(',' in refalt for refalt in (var[3], var[4])):
+            continue
+        if './.' in var[tumor_index]:
+            continue
+        vaf, ref_cov, alt_cov = __get_vaf(var, tumor_index, 'illumina')
+        # Sub 1% VAF vars are not even reliable enough to be counted for
+        # artifact.
+        if float(vaf) < 1:
+            continue
+        vcf_data.append([f'{var[0]}:{var[1]}', f'{var[3]}>{var[4]}'])
+    return tumor_name, vcf_data
 
 def run_ion_parser(vcf):
     sample_name = __get_sample_name(vcf)
@@ -221,6 +229,13 @@ def proc_vcfs(vcfs, source):
     
     for vcf in vcfs:
         sample_name, data = parse_vcf(vcf, source)
+
+        # XXX
+        #  pp(data)
+        #  for d in data:
+            #  print(','.join(d))
+        #  utils.__exit__()
+
         base_data[sample_name] = dict(zip(keys, get_var_metrics(data, sample_name)))
 
     return base_data
@@ -293,20 +308,24 @@ def __get_vaf(vcf_elems, info_index, source):
         vaf = '{:.2f}'.format(
             (float(alt_reads) / (float(alt_reads) + float(ref_reads))) * 100)
     except:
-        sys.stderr.write("WARNING: Can not get VAF from alt/ref reads for this "
-            "entry:\n\t")
-        pp(vcf_format)
-        pp(vcf_elems)
-        sys.stderr.flush()
-        sys.stdout.flush()
+        if quiet: 
+            pass
+        else:
+            sys.stderr.write("WARNING: Can not get VAF from alt/ref reads for this "
+                "entry:\n\t")
+            pp(vcf_format)
+            pp(vcf_elems)
+            sys.stderr.flush()
+            sys.stdout.flush()
 
-        sys.stderr.write("\nTrying to get allele frequency from format field "
-            "entry.\n")
+            sys.stderr.write("\nTrying to get allele frequency from format field "
+                "entry.\n")
         for k,v in vcf_format.items():
             if 'AF' in k:
                 vaf = float(v) * 100.00
-                sys.stderr.write("Got VAF from 'AF' field; data may not be "
-                    "accurate.\n\n")
+                if not quiet:
+                    sys.stderr.write("Got VAF from 'AF' field; data may not be "
+                        "accurate.\n\n")
                 break
     if vaf is None:
         sys.stderr.write("Can not retrieve VAF info for this entry. "
@@ -402,6 +421,7 @@ def main(vcfs, source, numprocs, quiet, reference, outfile):
         base_data = proc_vcfs_parallel(vcfs, source)
     else:
         base_data = proc_vcfs(vcfs, source)
+
     print_results(base_data, outfile)
 
 if __name__ == '__main__':

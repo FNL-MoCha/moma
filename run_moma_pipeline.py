@@ -43,7 +43,6 @@ scripts_dir = os.path.join(package_root, 'scripts')
 lib = os.path.join(package_root, 'lib')
 resources = os.path.join(package_root, 'resource')
 
-#version = '1.4.20200429'
 vfile = os.path.join(package_root, '_version.py')
 with open(vfile) as fh:
     verline = fh.readline().rstrip('\n').split('=')[1]
@@ -244,7 +243,7 @@ def get_name_from_vcf(vcf):
                     name = vcf.rstrip('.vcf')
     return name
 
-def simplify_vcf(vcf, outdir):
+def simplify_vcf(vcf, outdir, source):
     """
     Use the `simplify_vcf.pl` script to remove reference and NOCALLs from the 
     input VCF. Return a simplified VCF containing only 1 variant per line, and 
@@ -252,8 +251,13 @@ def simplify_vcf(vcf, outdir):
     VCF filename for downstream processing.
     """
     new_name = '{}_simple.vcf'.format(os.path.join(outdir, vcf.rstrip('.vcf')))
-    cmd = [os.path.join(scripts_dir, 'simplify_vcf.pl'), '-f', new_name, vcf]
-    status = run(cmd, 'simplify the Ion VCF', silent=not verbose)
+    if source == 'ion':
+        cmd = [os.path.join(scripts_dir, 'simplify_vcf.pl'), '-f', new_name, vcf]
+        status = run(cmd, 'simplify the Ion VCF', silent=not verbose)
+    elif source == 'mutect':
+        cmd = [os.path.join(scripts_dir, 'mutect2_parser.pl'), '-o', new_name,
+                vcf]
+        status = run(cmd, 'simplify the MuTect2 VCF', silent=not verbose)
     if status:
         log.write_log("error", "Could not run `simplify_vcf.pl`. Exiting.")
         sys.exit(1)
@@ -380,7 +384,12 @@ def run_var_sig(vcf, source, outfile):
     signature data, along with Ts/Tv ratio and Deamination Score (C>T at other
     sites compared to C>T at CpG sites).
     """
-    platform_map = {'oca' : 'ion', 'tso500' : 'illumina', 'wes' : 'illumina'}
+    platform_map = {
+        'oca'        : 'ion',
+        'tso500'     : 'illumina',
+        'wes'        : 'illumina',
+        'wes_mutect' : 'illumina'
+    }
     cmd = [os.path.join(scripts_dir, 'calc_tstv_deam.py'), '-s',
         platform_map[source], '-r', reference, '-o', outfile, vcf]
     status = run(cmd, 'Calculating Ts/Tv ratio, deamination score, and '
@@ -792,13 +801,15 @@ def __verify_vcf(vcf, source, noanno=False):
     oca: ##source="tvc 5.12-11 (35c9114f) - Torrent Variant Caller"
     tso500: ##source=Pisces 5.2.11.62
     wes: ##source=Platypus_Version_0.7.9.5
-    wes: ##joinAdjacentSNPs # Rajesh reommends this approach.
+    wes: ##joinAdjacentSNPs # Rajesh reommends this approach...but no always
+    reliable?
+    wes: ##SentieonCommandLine # Seems we're always using this pipeline.
 
     '''
     id_strings = {
         'oca'    : '##source="tvc',
         'tso500' : '##source=Pisces',
-        'wes'    : '##joinAdjacentSNPs'
+        'wes'    : '##SentieonCommandLine'
     }
 
     # Let anything pass as a correct file if we use the `--noanno` option
@@ -806,9 +817,23 @@ def __verify_vcf(vcf, source, noanno=False):
 
     with open(vcf) as fh:
         header = [line for line in fh if line.startswith('#')]
+
     if any(id_strings[source] in x for x in (header)):
-        return True
-    return False
+        # We can have two different WES piplines, tumor only (haplotype caller)
+        # or matched tumor / normal pair (MuTect2 somatic caller).  Need to know
+        # which is which so that we can handle the variant columns
+        # appropriately. Check to see if the tumor defined in the  VCF header 
+        # to know if we have MuTect2 or Haplotype Caller run; we'll only have a
+        # normal if a paired normal was run and not the "panel of normals".
+        if source == 'wes':
+            if any(x.startswith('##tumor_sample') for x  in header):
+                source = 'wes_mutect'
+        return source
+
+    # If we didn't get a match, throw an error.
+    log.write_log('error', f'Source type "{source}" does not appear to be '
+        'correct for this VCF. Check the source value.')
+    sys.exit(1)
 
 def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
         get_fusions, fusion_threshold, outdir, keep_intermediate_files, noanno, 
@@ -849,10 +874,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     log.write_log('header', welcome_str)
 
     # Verify the VCF source is correct for the VCF that we've loaded.
-    if not __verify_vcf(vcf, data_source, noanno):
-        log.write_log('error', f'Data type "{data_source}" does not appear '
-            'to be correct. Check the source is correct for this kind of VCF')
-        sys.exit(1)
+    data_source = __verify_vcf(vcf, data_source, noanno)
 
     if debug or noanno:
         log.write_log('unformatted', '\n\u001b[33m{decor}  TEST VERSION!  {decor}'
@@ -888,9 +910,15 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         # Simplify the VCF
         if data_source == 'oca':
             log.write_log('info', 'Simplifying the VCF file.')
-            num_vars, simple_vcf = simplify_vcf(vcf, outdir_path)
+            num_vars, simple_vcf = simplify_vcf(vcf, outdir_path, 'ion')
             log.write_log('info', 'Done simplifying VCF file. There are %s '
                 'variants in this specimen.' % str(num_vars))
+        elif data_source == 'wes_mutect':
+            log.write_log('info', 'MuTect2 Tumor / Normal run detected. Need '
+                'to remove normal data from the VCF.')
+            num_vars, simple_vcf = simplify_vcf(vcf, outdir_path, 'mutect')
+            log.write_log('info', 'Done simplifying VCF file. There are %s '
+                'somatic variants in this specimen.' % str(num_vars))
         else:
             log.write_log('info', 'VCF already ready for processing with '
                 'Annovar.')
@@ -901,8 +929,6 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
              'Annovar.')
         annovar_file = run_annovar(simple_vcf, sample_name)
 
-    # XXX
-    #  '''
     # Implement the MOMA here.
     log.write_log('info', 'Running OncoKB Filter rules on data to look for '
             'oncogenic variants.')
@@ -913,10 +939,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         f'{sample_name}_mocha_snv_indel_report.csv')
     log.write_log('info', f'Writing report data to {mutation_report}.')
     generate_report(oncokb_annotated_data, genes, mutation_report)
-    '''
 
-    #  XXX
-    #  '''
     # Generate a CNV report if we're asking for one.
     cnv_report = None
     if get_cnvs:
@@ -941,10 +964,6 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         gen_cnv_report(cnv_data_file, cu, cl, genelist, cnv_report, data_source)
         log.write_log('info', 'Done with CNV report.')
 
-    # XXX
-    #  utils.__exit__(msg='Finished updating CNV algorithm for TSO500.')
-    #  '''
-
     # Generate a Fusions report if we've asked for one.
     fusion_report = None
     if get_fusions:
@@ -962,24 +981,19 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         elif data_source == 'tso500':
             fusion_data_file = '{}.fusion.txt'.format(vcf.replace('.vcf', ''))
 
-        #XXX: Pick it up here!
         gen_fusion_report(fusion_data_file, fusion_threshold, genelist, 
                 fusion_report)
         log.write_log('info', "Done with Fusions report.")
 
     # Combine the three reports into one master report.
-    # TODO:
     moma_report = combine_reports(sample_name, mutation_report, cnv_report, 
             fusion_report, outdir_path)
 
-    # TODO:
-    #  '''
     # If we need a Rave report, generate one now.
     if rave_report:
         log.write_log('info', 'Generating a CSV file that can be uploaded '
                 'into Theradex Rave.')
         run_moma2rave(moma_report, outdir_path, rave_report)
-    #  '''
 
     # Clean up and move the logfile to data dir.
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
@@ -994,13 +1008,12 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     # Move our logfile into the output dir now that we're done.
     shutil.move(os.path.abspath(logfile), os.path.join(outdir_path, logfile))
 
-    log.write_log('info', 'MoCha OncoKB Annotator Pipline completed '
+    log.write_log('info', 'MoCha OncoKB Annotator Pipeline completed '
          'successfully! Data can be found in %s.' % outdir_path)
 
     if debug:
         sys.stderr.write('\u001b[33m{decor}\u001b[0m\n'.format(decor='='*67))
         sys.exit()
-
 
 if __name__ == '__main__':
     args = get_args()

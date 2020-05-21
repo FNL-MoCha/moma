@@ -1,23 +1,35 @@
+# Misc OS and tool temp files and whatnot.
 *~
 *.swp
 *.log
 .DS_Store
 *.pyc
 __pycache__
-test/gen_tests
-test/*/*_out
+
+# Backup and temp files I use.
+TODO
 tmp
 bak
 dist
+make_package.sh
+hg19*
+
+# Don't track Annovar in this repo.
 lib/annovar/*
+
+# Doc files.
+doc/_build
+doc/old
+doc/Makefile
+
+# Resource directory files not to track
 resource/annovar_db
 resource/lookup_file_workshop
 resource/old_versions
 resource/scratch/
-make_package.sh
-TODO
-hg19*
+resource/README.rst
 resource/count.txt
-doc/_build
-doc/old
-doc/Makefile
+
+# Misc test directory stuff not to track
+test/gen_tests
+test/*/*_out
