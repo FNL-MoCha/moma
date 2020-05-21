@@ -1021,13 +1021,13 @@ if __name__ == '__main__':
     """
     Check the environment to make sure we have everything we need before we get
     started.
-    required_progs = ('vcftools', 'annovar', 'annovar_db')
     """
-    if shutil.which('vcftools') is None:
-        sys.stderr.write("ERROR: VCF Tools module is not loaded or package not "
-            "found on this system. Can not continue!\n")
+    try:
+        subprocess.check_call([os.path.join(scripts_dir, 'env_check.py')])
+    except subprocess.CalledProcessError:
         sys.exit(1)
-    elif not os.path.exists(os.path.join(lib, 'annovar')):
+
+    if not os.path.exists(os.path.join(lib, 'annovar')):
         sys.stderr.write("ERROR: Annovar has not been added to this package. "
             "You must first install Annovar and add this binary to the 'lib' "
             "directory.\n")
