@@ -600,7 +600,6 @@ def gen_cnv_report(cnv_data_file, cu, cl, genelist, outfile, source):
         log.write_log('info', 'Annotating with OncoKB lookup.')
         __oncokb_cnv_and_fusion_annotate(cnv_data, oncokb_cnv_file, 'cnv')
 
-
     # Set up column headers for different assays.
     assay_elems = {
         'oca' : ('Chr', 'Start', 'End', 'Gene', 'CN', 'CI_05', 'CI_95', 'MAPD',
@@ -620,6 +619,8 @@ def gen_cnv_report(cnv_data_file, cu, cl, genelist, outfile, source):
                 csv_writer.writerow(data)
         else:
             outfh.write("No CNVs found.\n")
+
+    return cnv_data
 
 def __cnv_filter(lower_reading, upper_reading, cu, cl):
     if lower_reading > float(cu):
@@ -722,6 +723,8 @@ def gen_fusion_report(vcf, reads, genelist, filename):
                 csv_writer.writerow(data)
         else:
             outfh.write("No Fusions found.\n")
+
+    return fusion_data
 
 def combine_reports(sample_name, mut_report, cnv_report, fusion_report, path):
     final_report_name = '{}_moma_report_{}.csv'.format(sample_name,
@@ -834,6 +837,16 @@ def __verify_vcf(vcf, source, noanno=False):
     log.write_log('error', f'Source type "{source}" does not appear to be '
         'correct for this VCF. Check the source value.')
     sys.exit(1)
+
+def __jsonify_moma_data(sample_name, snv_data, cnv_data, fusion_data, outfile):
+    # Create a JSON blob of data that we can use for databasing and whatnot.
+
+    parsed_data = {sample_name : {'snv_indels' : snv_data, 'cnvs' : cnv_data,
+        'fusions' : fusion_data}}
+
+    utils.print_json(parsed_data)
+    utils.make_json(outfile=outfile, data=parsed_data)
+
 
 def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
         get_fusions, fusion_threshold, outdir, keep_intermediate_files, noanno, 
@@ -957,11 +970,12 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
             cnv_data_file = '{}.cnv.fc.txt'.format(vcf.replace('.vcf', ''))
 
         if not os.path.exists(cnv_data_file):
-            log.write_log('error', 'CNV file {} can not be found.'
+            log.write_log('error', f'CNV file "{cnv_data_file}" can not be found.'
                 'Make sure the file is in the same location as the VCF.')
             sys.exit(1)
 
-        gen_cnv_report(cnv_data_file, cu, cl, genelist, cnv_report, data_source)
+        oncokb_cnv_data = gen_cnv_report(cnv_data_file, cu, cl, genelist, 
+                cnv_report, data_source)
         log.write_log('info', 'Done with CNV report.')
 
     # Generate a Fusions report if we've asked for one.
@@ -981,8 +995,8 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         elif data_source == 'tso500':
             fusion_data_file = '{}.fusion.txt'.format(vcf.replace('.vcf', ''))
 
-        gen_fusion_report(fusion_data_file, fusion_threshold, genelist, 
-                fusion_report)
+        oncokb_fusion_data = gen_fusion_report(fusion_data_file, 
+            fusion_threshold, genelist, fusion_report)
         log.write_log('info', "Done with Fusions report.")
 
     # Combine the three reports into one master report.
@@ -994,6 +1008,11 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         log.write_log('info', 'Generating a CSV file that can be uploaded '
                 'into Theradex Rave.')
         run_moma2rave(moma_report, outdir_path, rave_report)
+
+    # Generate a JSON blob of data for databasing and other purposes
+    json_out = os.path.join(outdir_path, f'{sample_name}_moma_data.json')
+    jdata = __jsonify_moma_data(sample_name, snv_data=oncokb_annotated_data,
+        cnv_data=oncokb_cnv_data, fusion_data=oncokb_fusion_data, outfile=json_out)
 
     # Clean up and move the logfile to data dir.
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
