@@ -262,12 +262,13 @@ sub __gen_hgvs {
 
     local $SIG{__WARN__} = sub {
         my $msg = shift;
-        print "ERROR: Can not generate a HGVS annotatino for the following:\n";
+        print "ERROR: Can not generate a HGVS annotation for the following:\n";
         dd $var_elems;
         print $msg;
         exit;
     };
 
+    # Based on GRCh37.p13
     my %g_refseq = (
         chr1 => 'NC_000001.10', chr2 => 'NC_000002.11', chr3 => 'NC_000003.11',
         chr4 => 'NC_000004.11', chr5 => 'NC_000005.9', chr6 => 'NC_000006.11',
