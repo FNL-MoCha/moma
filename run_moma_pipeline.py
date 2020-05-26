@@ -504,29 +504,19 @@ def __filter_oncokb_data(annotated_maf, source):
             var_data['Exon_Number'] = 'exon{}'.format(
                     var_data['Exon_Number'].split('/')[0])
 
-            final_data[varid] = var_data
 
-            '''
-            # TODO: Remove this.
-            # XXX This is residual from the previous method. I don't need any of
-            # this, but it could _possibly_ be helpful to have th PopFreqMax and
-            # mean pop frequency values for each type in the output. 
-            new = {
-                'sift'        : __translate(data['SIFT_pred']),
-                'polyphen'    : __translate(data['Polyphen2_HDIV_pred']),
-                'vaf'         : vaf,
-                'alt_reads'   : alt_reads,
-                'ref_reads'   : ref_reads,
-                'CLNREVSTAT'  : data['CLNREVSTAT'],
-                'CLNSIG'      : data['CLNSIG'],
-                'cosid'       : __get_cosmic_id(data['cosmic89_noEnst']),
-                'max_popfreq' : data['PopFreqMax'],
-                '1000g_mean'  : __get_avg_pop(data, '1000G'),
-                'exac_mean'   : __get_avg_pop(data, 'ExAC'),
-                'gnomad_mean' : __get_avg_pop(data, 'GnomAD')
-            }
-            final_data[varid].update(new)
-            '''
+            # Add the HGVS ids to each. Remap the keys for the function, just to
+            # keep the function more generic for potential use in other bits.
+            func_keys = ('gene', 'chr', 'pos', 'ref', 'alt', 'cds', 'aa',
+                    'transcript')
+            current_keys = ('Hugo_Symbol', 'Chromosome', 'Start_Position',
+                'Reference_Allele', 'Tumor_Seq_Allele2', 'HGVSc', 'HGVSp',
+                'RefSeq')
+            map_data = dict(zip(func_keys, itemgetter(*current_keys)(var_data)))
+
+            var_data.update(dict(zip(('HGVSg_full', 'HGVSc_full', 'HGVSp_full'),
+                utils.gen_hgvs(map_data))))
+            final_data[varid] = var_data
 
     #  utils.pp(final_data)
     #  utils.__exit__(432,'')
@@ -843,8 +833,7 @@ def __jsonify_moma_data(sample_name, snv_data, cnv_data, fusion_data, outfile):
 
     parsed_data = {sample_name : {'snv_indels' : snv_data, 'cnvs' : cnv_data,
         'fusions' : fusion_data}}
-
-    utils.print_json(parsed_data)
+    #  utils.print_json(parsed_data)
     utils.make_json(outfile=outfile, data=parsed_data)
 
 
@@ -1011,8 +1000,13 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
 
     # Generate a JSON blob of data for databasing and other purposes
     json_out = os.path.join(outdir_path, f'{sample_name}_moma_data.json')
-    jdata = __jsonify_moma_data(sample_name, snv_data=oncokb_annotated_data,
-        cnv_data=oncokb_cnv_data, fusion_data=oncokb_fusion_data, outfile=json_out)
+    __jsonify_moma_data(
+        sample_name, 
+        snv_data=oncokb_annotated_data,
+        cnv_data=oncokb_cnv_data, 
+        fusion_data=oncokb_fusion_data, 
+        outfile=json_out
+    )
 
     # Clean up and move the logfile to data dir.
     contents = [os.path.join(outdir_path, f) for f in os.listdir(outdir_path)]
