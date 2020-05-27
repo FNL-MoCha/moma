@@ -944,6 +944,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
 
     # Generate a CNV report if we're asking for one.
     cnv_report = None
+    oncokb_cnv_data = []
     if get_cnvs:
         log.write_log('info', 
             f"Generating a CNV report for sample '{sample_name}'.\n")
@@ -969,6 +970,7 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
 
     # Generate a Fusions report if we've asked for one.
     fusion_report = None
+    oncokb_fusion_data = []
     if get_fusions:
 
         units = '%' if data_source == 'tso500' else ' reads'
