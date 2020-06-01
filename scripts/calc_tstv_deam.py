@@ -32,7 +32,7 @@ sys.path.insert(0, lib_path)
 import natsort
 import utils # noqa
 
-version = '1.4.050420'
+version = '1.5.060120'
 global quiet
 
 reference=os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 
@@ -100,6 +100,12 @@ def parse_vcf(vcf, source):
 def run_illumina_parser(vcf):
     vcf_data = []
 
+    filters = {
+        'multiallelic' : 0,
+        'nocall'       : 0,
+        'low_vaf'      : 0,
+    }
+
     # Rajesh says that the correct sample name will always be in the VCF file's
     # name, and that we can rely on that to map the VCF when a paired tumor /
     # normal is sequenced.
@@ -128,16 +134,19 @@ def run_illumina_parser(vcf):
         # the VCF.  I think it's usually homopolymer indels, and so we can skip
         # these for this analysis.
         if any(',' in refalt for refalt in (var[3], var[4])):
+            filters['multiallelic'] += 1
             continue
         if './.' in var[tumor_index]:
+            filters['nocall'] += 1
             continue
         vaf, ref_cov, alt_cov = __get_vaf(var, tumor_index, 'illumina')
         # Sub 1% VAF vars are not even reliable enough to be counted for
         # artifact.
         if float(vaf) < 1:
+            filters['low_vaf'] += 1
             continue
         vcf_data.append([f'{var[0]}:{var[1]}', f'{var[3]}>{var[4]}'])
-    return tumor_name, vcf_data
+    return tumor_name, vcf_data, filters
 
 def run_ion_parser(vcf):
     sample_name = __get_sample_name(vcf)
@@ -228,7 +237,11 @@ def proc_vcfs(vcfs, source):
     keys = ['tot_vars', 'num_indels', 'titv', 'deam_score', 'sbs_6', 'sbs_96']
     
     for vcf in vcfs:
-        sample_name, data = parse_vcf(vcf, source)
+        sample_name, data, filtered_counts = parse_vcf(vcf, source)
+
+        sys.stdout.write(f'Filtered variants in {sample_name}:\n')
+        for k, v in filtered_counts.items():
+            sys.stdout.write(f'\t{k}: {v}\n')
 
         # XXX
         #  pp(data)

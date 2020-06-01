@@ -11,7 +11,7 @@ use Data::Dump;
 use Getopt::Long;
 use File::Basename;
 
-my $version = '1.0.050420';
+my $version = '1.1.060120';
 my $scriptname = basename($0);
 my $description = <<"EOT";
 Since the MuTect2 VCF files have both a germline and tumor sample in order to 
@@ -65,10 +65,22 @@ my @wanted_fields = qw(%CHROM %POS %ID %REF %ALT %QUAL %FILTER %INFO [%GTR %AD %
 my $vcf_format = join('\t', @wanted_fields);
 my @extracted_data = qx( vcf-query $vcf -c $tumor_sample -f "$vcf_format\n" );
 
-make_new_vcf($tumor_sample, \@extracted_data, $outfile);
+my %filter_counts;
+make_new_vcf($tumor_sample, \@extracted_data, $outfile, \%filter_counts);
+
+# Print the filter counts for record keeping purposes.
+print "\nSample filtering metrics for $tumor_sample\n";
+my $total = 0;
+for (sort{ $a cmp $b } keys %filter_counts) {
+    printf("\t%20s %7s\n", $_, $filter_counts{$_});
+    $total += $filter_counts{$_};
+}
+printf("\t%s\n\t%20s %7s*\n", "-" x 28, "Total", $total);
+print "\n\t*note: Number can be higher than total variants since multiple\n" .
+      "\t       filter terms can be applied to one variant.\n";
 
 sub make_new_vcf {
-    my ($sample_id, $data, $outfile) = @_;
+    my ($sample_id, $data, $outfile, $filter_counts) = @_;
 
     my $outfh;
     if ($outfile) {
@@ -78,6 +90,7 @@ sub make_new_vcf {
         $outfh = \*STDOUT;
     }
 
+    # Print the new header to file.
     while (<DATA>) {
         print {$outfh} $_;
     }
@@ -91,13 +104,14 @@ sub make_new_vcf {
         # Filter out non "PASS" variants as I'm told non-somatic calls will not
         # have a PASS string, which is the point of this algorithm. Not sure why
         # the calls aren't just filtered out of the VCF.
-        if ($var =~ /PASS/) {
-            chomp $var;
-            my @data = split(/\t/, $var);
+        chomp(my @data = split(/\t/, $var));
+        if ($data[6] =~ /PASS/) {
             my $format = "GT:AD:AF";
             my $fdata = join(":", splice(@data, -3));
             print {$outfh} join("\t", @data, $format, $fdata), "\n";
-        }
+        } 
+        my @filter_terms = split(/;/, $data[6]);
+        $filter_counts->{$_}++ for @filter_terms;
     }
 }
 
