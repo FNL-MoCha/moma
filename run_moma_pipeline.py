@@ -397,9 +397,10 @@ def run_var_sig(vcf, source, outfile):
     log.write_log('info', "Results from SBS script:")
 
     # Capture the output we want from the script, avoiding error messages.
-    wanted_data = [ x.rstrip('\n') for x in status if x.startswith('\t') ]
+    wanted_data = [ x.rstrip('\n') for x in status if x.startswith('\t') or 
+            x.startswith('F')]
 
-    for i in wanted_data[1:]:
+    for i in wanted_data:
         log.write_log(None, i)
 
     results = {}
@@ -903,12 +904,6 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
         if not os.path.exists(outdir_path):
             os.mkdir(os.path.abspath(outdir_path), 0o755)
 
-        # Run Mutational Signature QC to determine Ts/Tv and deamination score.
-        log.write_log('info', 'Generating Ts/Tv, Deamination Score, and '
-            'SBS-6 information for sample.')
-        outfile = f'{outdir_path}/{sample_name}_sbs_metrics.csv'
-        run_var_sig(vcf, data_source, outfile)
-
         # Simplify the VCF
         if data_source == 'oca':
             log.write_log('info', 'Simplifying the VCF file.')
@@ -925,6 +920,14 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
             log.write_log('info', 'VCF already ready for processing with '
                 'Annovar.')
             simple_vcf = vcf
+
+        # Run Mutational Signature QC to determine Ts/Tv and deamination score.
+        log.write_log('info', 'Generating Ts/Tv, Deamination Score, and '
+            'SBS-6 information for sample.')
+        outfile = f'{outdir_path}/{sample_name}_sbs_metrics.csv'
+        sbs_input_vcf = simple_vcf if data_source != 'oca' else vcf
+        #  run_var_sig(vcf, data_source, outfile)
+        run_var_sig(sbs_input_vcf, data_source, outfile)
 
         # Annotate the vcf with ANNOVAR.
         log.write_log('info', 'Annotating the simplified VCF file with '

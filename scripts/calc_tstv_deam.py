@@ -168,7 +168,7 @@ def run_ion_parser(vcf):
                 continue
             else:
                 vcf_data.append([elems[0], '{}>{}'.format(elems[1], elems[2])])
-    return sample_name, vcf_data
+    return sample_name, vcf_data, None
 
 
 def proc_vcfs_parallel(vcfs, source):
@@ -239,9 +239,12 @@ def proc_vcfs(vcfs, source):
     for vcf in vcfs:
         sample_name, data, filtered_counts = parse_vcf(vcf, source)
 
-        sys.stdout.write(f'Filtered variants in {sample_name}:\n')
-        for k, v in filtered_counts.items():
-            sys.stdout.write(f'\t{k}: {v}\n')
+        if filtered_counts is not None:
+            sys.stdout.write(f'\n\tFiltered variants in {sample_name}:\n')
+            sys.stdout.flush()
+            for k, v in filtered_counts.items():
+                sys.stdout.write(f'\t  {k}: {v}\n')
+                sys.stdout.flush()
 
         # XXX
         #  pp(data)
