@@ -257,8 +257,12 @@ def simplify_vcf(vcf, outdir, source):
     elif source == 'mutect':
         cmd = [os.path.join(scripts_dir, 'mutect2_parser.pl'), '-o', new_name,
                 vcf]
-        status = run(cmd, 'simplify the MuTect2 VCF', silent=not verbose)
-    if status:
+        status = run(cmd, 'simplify the MuTect2 VCF', ret_data=True, 
+        #  status = run(cmd, 'simplify the MuTect2 VCF',
+            silent=not verbose)
+        for line in status[2:]:
+            log.write_log(None, line)
+    if status and source != 'mutect':
         log.write_log("error", "Could not run `simplify_vcf.pl`. Exiting.")
         sys.exit(1)
     else:
