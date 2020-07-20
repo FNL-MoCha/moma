@@ -15,7 +15,7 @@ use Text::CSV;
 use Sort::Versions;
 use Data::Dump;
 
-my $version = '1.1.020220';
+my $version = '1.2.072020';
 my $scriptname = basename($0);
 my $description = <<"EOT";
 Starting with a set of MOI reports from the MOMA tool, generate a single CSV
@@ -139,18 +139,37 @@ sub print_results {
 
     for my $sample (sort {versioncmp($a, $b)} keys %$data) {
         for my $type (@vartypes) {
+
+            # local $SIG{__WARN__} = sub {
+                # my $msg = shift;
+                # print "Error with entry:\n";
+                # dd \@{$data{$sample}->{$type}};
+                # exit 1;
+            # };
+
             if (@{$data{$sample}->{$type}} < 1) {
+                # No results for this type.
                 print {$outfh} join(',', $sample, $type, "None\n");
                 next;
             }  
-            for my $var (@{$data{$sample}->{$type}}) {
-                # dd \$var; exit;
-                print {$outfh} join(',', $sample, $type, 
-                    $var->{'HGVS_g'},
-                    $var->{'HGVS_c'},
-                    $var->{'HGVS_p'},
-                    @$var{@{$wanted->{$type}}}), "\n";
+            elsif ($type eq 'SNV') {
+                for my $var (@{$data{$sample}->{$type}}) {
+                    print {$outfh} join(',', 
+                        $sample, 
+                        $type, 
+                        $var->{'HGVS_g'},
+                        $var->{'HGVS_c'},
+                        $var->{'HGVS_p'},
+                        @$var{@{$wanted->{$type}}}), "\n";
+                }
+            } else {
+                # Working with non-SNV data that won't have HGVS output.
+                for my $var (@{$data{$sample}->{$type}}) {
+                    print {$outfh} join(',', $sample, $type, '.', '.', ',',
+                        @$var{@{$wanted->{$type}}}), "\n";
+                }
             }
+
         }
         print {$outfh} "\n";
     }
