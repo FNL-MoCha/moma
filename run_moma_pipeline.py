@@ -190,6 +190,13 @@ def get_args():
             'quotes.'
     )
     parser.add_argument(
+        '--nocheck',
+        action='store_true',
+        default=False,
+        help="Do not check VCF data source is correct for the file passed in. "
+            "This can either bail you out or cause chaos. Use with caution!."
+    )
+    parser.add_argument(
         '-v', '--version', 
         action='version',
         version='%(prog)s - v' + version
@@ -206,12 +213,14 @@ def get_args():
         action='store_true',
         help=argparse.SUPPRESS
     )
+    '''
+    Another undocumented arg to automatically turn on all debugging and verbose
+    messages for dev work.
+    '''
     parser.add_argument(
-        '--nocheck',
+        '--debug', 
         action='store_true',
-        default=False,
-        help="Do not check VCF data source is correct for the file passed in. "
-            "This can either bail you out or cause chaos. Use with caution!."
+        help=argparse.SUPPRESS
     )
     args = parser.parse_args()
 
@@ -221,6 +230,12 @@ def get_args():
     if args.quiet:
         sys.stderr.write("Running in quiet mode.")
         quiet = True
+
+    global debug
+    if args.debug:
+        debug = True
+        verbose = True
+
 
     # If we want CNV data, need to get a different threshold depending on the
     # assay type.
@@ -808,6 +823,7 @@ def __read_report(report):
         return [line.rstrip('\n') for line in fh]
 
 def __verify_vcf(vcf, source, noanno=False, nocheck=False):
+    # TODO: we need a much, much (!!) better way to do this.
     '''
     Make sure that the VCF loaded matches the source string so that we can make
     sure that we're parsing it correctly.
@@ -874,12 +890,20 @@ def __jsonify_moma_data(sample_name, snv_data, cnv_data, fusion_data, outfile):
     #  utils.print_json(parsed_data)
     utils.make_json(outfile=outfile, data=parsed_data)
 
-
 def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
         get_fusions, fusion_threshold, outdir, keep_intermediate_files, noanno, 
         rave_report, nocheck):
 
     global outdir_path, debug, verbose, log
+
+    # Allow gzipped or bgzipped files to be processed. Since downstream helper
+    # scripts in different languages and whatnot, just decompress for this
+    # purpose and then dump the extra copy. Most files won't take up so much
+    # file space that this is a real issue.
+    gzipped_vcf = False
+    if 'gzip' in subprocess.check_output(['file', vcf]).decode('utf-8'):
+        gzipped_vcf = True
+        vcf = utils.gunzip_vcf(vcf)
 
     if sample_name is None:
         sample_name = get_name_from_vcf(vcf)
@@ -1067,6 +1091,13 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
                 'fusion_report.csv')):
                     log.write_log('debug', f'Removing {f}.')
                     os.remove(f)
+
+    # If we deompresssed the VCF for this run, get rid of the decompressed file
+    # to save space
+    if gzipped_vcf is True:
+        print('removing decomp vcf.')
+        log.write_log('debug', 'Removing decompressed VCF.')
+        os.remove(vcf)
 
     # Move our logfile into the output dir now that we're done.
     shutil.move(os.path.abspath(logfile), os.path.join(outdir_path, logfile))

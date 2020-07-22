@@ -3,6 +3,8 @@
 import os
 import sys
 import json
+import gzip
+import shutil
 import inspect
 import datetime
 
@@ -92,3 +94,15 @@ def print_json(data):
 def read_json(jfile):
     with open(jfile) as fh:
         return json.load(fh)
+
+def gunzip_vcf(vcf):
+    """
+    Decompress gzipped and bgzipped (the gzip lib seems to be OK with either)
+    VCF files so that we can use them in MOMA.
+    """
+    gunzipped_file = vcf.replace('.gz', '')
+    with gzip.open(vcf, 'rb') as gz_fh:
+        with open(gunzipped_file, 'wb') as fh:
+            shutil.copyfileobj(gz_fh, fh)
+    return gunzipped_file
+
