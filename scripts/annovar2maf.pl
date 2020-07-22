@@ -305,7 +305,11 @@ sub get_maf_fields {
     # Generate an "Existing Variation" field from COSMIC and dbSNP IDs.
     my $varid;
     my @ids = grep{ ! /\./ } ($var_data->{'avsnp142'}, $var_data->{'cosids'});
-    $collected_data->{'Existing_variation'} = join(';', @ids);
+    # $collected_data->{'Existing_variation'} = join(';', @ids);
+    (@ids) 
+        ? ($varid = join(';', @ids))
+        : ($varid = '.');
+    $collected_data->{'Existing_variation'} = $varid;
 
     # Translate the SIFT and PolyPhen data.
     $collected_data->{'SIFT'}     = __translate_sift_polyphen($var_data, 'sift');
