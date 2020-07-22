@@ -206,6 +206,13 @@ def get_args():
         action='store_true',
         help=argparse.SUPPRESS
     )
+    parser.add_argument(
+        '--nocheck',
+        action='store_true',
+        default=False,
+        help="Do not check VCF data source is correct for the file passed in. "
+            "This can either bail you out or cause chaos. Use with caution!."
+    )
     args = parser.parse_args()
 
     if args.Verbose:
@@ -262,7 +269,14 @@ def simplify_vcf(vcf, outdir, source):
             silent=not verbose)
         for line in status[2:]:
             log.write_log(None, line)
-    if status and source != 'mutect':
+    elif source == 'strelka':
+        cmd = [os.path.join(scripts_dir, 'strelka2_parser.pl'), '-o', new_name,
+                vcf]
+        status = run(cmd, 'simplify the Strelka2 VCF', ret_data=True,
+                silent=not verbose)
+        for line in status[2:]:
+            log.write_log(None, line)
+    if status and source not in ('mutect', 'strelka'):
         log.write_log("error", "Could not run `simplify_vcf.pl`. Exiting.")
         sys.exit(1)
     else:
@@ -389,10 +403,11 @@ def run_var_sig(vcf, source, outfile):
     sites compared to C>T at CpG sites).
     """
     platform_map = {
-        'oca'        : 'ion',
-        'tso500'     : 'illumina',
-        'wes'        : 'illumina',
-        'wes_mutect' : 'illumina'
+        'oca'         : 'ion',
+        'tso500'      : 'illumina',
+        'wes'         : 'illumina',
+        'wes_mutect'  : 'illumina',
+        'wes_strelka' : 'illumina',
     }
     cmd = [os.path.join(scripts_dir, 'calc_tstv_deam.py'), '-s',
         platform_map[source], '-r', reference, '-o', outfile, vcf]
@@ -629,7 +644,8 @@ def __oncokb_cnv_and_fusion_annotate(data, lookup_file, datatype):
     oncokb_fields = ('Alteration', 'Oncogenicity', 'Effect')
 
     with open(lookup_file) as fh:
-        _ = fh.readline()
+        # Skip the first line.
+        _ = fh.readline() # noqa
         for line in fh:
             elems = line.rstrip('\n').split('\t')
             okb_lookup[elems[0]] = elems[1:]
@@ -791,14 +807,13 @@ def __read_report(report):
     with open(report) as fh:
         return [line.rstrip('\n') for line in fh]
 
-def __verify_vcf(vcf, source, noanno=False):
+def __verify_vcf(vcf, source, noanno=False, nocheck=False):
     '''
     Make sure that the VCF loaded matches the source string so that we can make
     sure that we're parsing it correctly.
 
     oca: ##source="tvc 5.12-11 (35c9114f) - Torrent Variant Caller"
     tso500: ##source=Pisces 5.2.11.62
-    wes: ##source=Platypus_Version_0.7.9.5
     wes: ##joinAdjacentSNPs # Rajesh reommends this approach...but no always
     reliable?
     wes: ##SentieonCommandLine # Seems we're always using this pipeline.
@@ -807,7 +822,9 @@ def __verify_vcf(vcf, source, noanno=False):
     id_strings = {
         'oca'    : '##source="tvc',
         'tso500' : '##source=Pisces',
-        'wes'    : '##SentieonCommandLine'
+        #  'wes'    : '##SentieonCommandLine'
+        #  'wes'    : '##GATKCommandLine'
+        'wes'    : '##joinAdjacentSNPs_command'
     }
 
     # Let anything pass as a correct file if we use the `--noanno` option
@@ -816,21 +833,37 @@ def __verify_vcf(vcf, source, noanno=False):
     with open(vcf) as fh:
         header = [line for line in fh if line.startswith('#')]
 
+    if nocheck:
+        """
+        Still need to check to see if the run is MuTect2 or not, since that will
+        dramatically affect the way the data are handled.  Then again, if we're 
+        asking for a nocheck, then we ought to know what we're getting ourselves
+        in to!
+        """
+        if (any(x.startswith('##tumor_sample')) and
+                any(x.startswith('##normal_sample')) for x in header):
+                return 'wes_mutect'
+        return True
+
     if any(id_strings[source] in x for x in (header)):
-        # We can have two different WES piplines, tumor only (haplotype caller)
-        # or matched tumor / normal pair (MuTect2 somatic caller).  Need to know
-        # which is which so that we can handle the variant columns
+        # We can have many different WES piplines, tumor only (haplotype caller)
+        # or matched tumor / normal pair (MuTect2 somatic caller or Strelka) for
+        # example.  
+        # Need to know which is which so that we can handle the variant columns
         # appropriately. Check to see if the tumor defined in the  VCF header 
         # to know if we have MuTect2 or Haplotype Caller run; we'll only have a
         # normal if a paired normal was run and not the "panel of normals".
         if source == 'wes':
-            if any(x.startswith('##tumor_sample') for x  in header):
+            if any(x.startswith('##tumor_sample') for x in header):
                 source = 'wes_mutect'
+            elif any(x.startswith('##source=strelka') for x in header):
+                source = 'wes_strelka'
         return source
 
     # If we didn't get a match, throw an error.
     log.write_log('error', f'Source type "{source}" does not appear to be '
-        'correct for this VCF. Check the source value.')
+        f"correct for this VCF (expected string: '{id_strings[source]}'). Check "
+        'the source value.')
     sys.exit(1)
 
 def __jsonify_moma_data(sample_name, snv_data, cnv_data, fusion_data, outfile):
@@ -844,7 +877,7 @@ def __jsonify_moma_data(sample_name, snv_data, cnv_data, fusion_data, outfile):
 
 def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl, 
         get_fusions, fusion_threshold, outdir, keep_intermediate_files, noanno, 
-        rave_report):
+        rave_report, nocheck):
 
     global outdir_path, debug, verbose, log
 
@@ -881,7 +914,10 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
     log.write_log('header', welcome_str)
 
     # Verify the VCF source is correct for the VCF that we've loaded.
-    data_source = __verify_vcf(vcf, data_source, noanno)
+    if nocheck:
+        log.write_log('warn', f"Passing VCF of type '{data_source}' without "
+                'verification.')
+    data_source = __verify_vcf(vcf, data_source, noanno, nocheck)
 
     if debug or noanno:
         log.write_log('unformatted', '\n\u001b[33m{decor}  TEST VERSION!  {decor}'
@@ -920,6 +956,12 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
             num_vars, simple_vcf = simplify_vcf(vcf, outdir_path, 'mutect')
             log.write_log('info', 'Done simplifying VCF file. There are %s '
                 'somatic variants in this specimen.' % str(num_vars))
+        elif data_source == 'wes_strelka':
+            log.write_log('info', 'Strelka2 run detected. Need to pre-process '
+                'the data.')
+            num_vars, simple_vcf = simplify_vcf(vcf, outdir_path, 'strelka')
+            log.write_log('info', 'Done pre-processing VCF. There are {} '
+                    'somatic variants in this specimen.'.format(str(num_vars)))
         else:
             log.write_log('info', 'VCF already ready for processing with '
                 'Annovar.')
@@ -930,7 +972,6 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
             'SBS-6 information for sample.')
         outfile = f'{outdir_path}/{sample_name}_sbs_metrics.csv'
         sbs_input_vcf = simple_vcf if data_source != 'oca' else vcf
-        #  run_var_sig(vcf, data_source, outfile)
         run_var_sig(sbs_input_vcf, data_source, outfile)
 
         # Annotate the vcf with ANNOVAR.
@@ -1075,4 +1116,4 @@ if __name__ == '__main__':
 
     main(args.vcf, args.source, args.name, genelist, args.popfreq, args.CNV, 
             args.cu, args.cl, args.Fusion, fusion_threshold, args.outdir,
-            args.keep, args.noanno, args.rave)
+            args.keep, args.noanno, args.rave, args.nocheck)
