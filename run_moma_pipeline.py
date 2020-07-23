@@ -272,7 +272,9 @@ def simplify_vcf(vcf, outdir, source):
     with only the critical VAF and coverage info.  Return the resultant simple
     VCF filename for downstream processing.
     """
-    new_name = '{}_simple.vcf'.format(os.path.join(outdir, vcf.rstrip('.vcf')))
+    new_name = '{}_simple.vcf'.format(os.path.join(outdir, 
+        os.path.basename(vcf.rstrip('.vcf'))))
+
     if source == 'ion':
         cmd = [os.path.join(scripts_dir, 'simplify_vcf.pl'), '-f', new_name, vcf]
         status = run(cmd, 'simplify the Ion VCF', silent=not verbose)
@@ -954,16 +956,13 @@ def main(vcf, data_source, sample_name, genes, popfreq, get_cnvs, cu, cl,
             '\u001b[33m\t\t===>  Running without Annovar annotation  <===\u001b[0m\n\n')
         annovar_file = vcf
         outdir_path = os.getcwd()
-
-        log.write_log('debug', 
-                f'Selected destination dir for data is: {outdir_path}')
     else:
         if outdir is None:
-            outdir_path = os.path.join(outdir_path, '%s_out' % sample_name)
+            outdir_path = os.path.join(outdir_path, f'{sample_name}_out')
         else:
             outdir_path = os.path.join(outdir_path, outdir)
-        log.write_log('debug', 
-                f'Selected destination dir for data is: {outdir_path}')
+
+        log.write_log('info', f'Selected destination dir for data is: {outdir_path}')
 
         if not os.path.exists(outdir_path):
             os.mkdir(os.path.abspath(outdir_path), 0o755)
